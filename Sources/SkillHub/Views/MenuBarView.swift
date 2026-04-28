@@ -75,10 +75,7 @@ final class MenuBarView {
     }
 
     @objc private func openMainWindow() {
-        NSApp.activate(ignoringOtherApps: true)
-        if let window = NSApp.windows.first(where: { $0.title == "SkillHub" }) {
-            window.makeKeyAndOrderFront(nil)
-        }
+        (NSApp.delegate as? AppDelegate)?.openMainWindow()
     }
 
     @objc private func refresh() {

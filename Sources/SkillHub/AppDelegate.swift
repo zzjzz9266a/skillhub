@@ -20,6 +20,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupFileWatcher()
     }
 
+    func openMainWindow() {
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        for window in NSApp.windows {
+            if window.canBecomeKey, !(window is NSPanel) {
+                window.makeKeyAndOrderFront(nil)
+                return
+            }
+        }
+    }
+
     private func setupFileWatcher() {
         let hubPath = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".skillhub").path
