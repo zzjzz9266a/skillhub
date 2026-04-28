@@ -7,7 +7,12 @@ struct SkillHubApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .frame(minWidth: 800, minHeight: 600)
+                .environmentObject(appDelegate.viewModel)
+        }
+        .windowStyle(.titleBar)
+        .windowResizability(.contentMinSize)
+        .commands {
+            CommandGroup(replacing: .newItem) {}
         }
     }
 }
