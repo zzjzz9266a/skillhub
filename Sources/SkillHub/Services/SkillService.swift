@@ -42,7 +42,7 @@ final class SkillService {
             let destPath = (targetDir as NSString).appendingPathComponent(skill.name)
             try FileManager.default.copyItem(atPath: skill.path, toPath: destPath)
 
-            let record = Skill(
+            var record = Skill(
                 name: skill.name,
                 sourceId: source.id,
                 installPath: destPath,
@@ -106,6 +106,12 @@ final class SkillService {
                 let groups = parseGroups(from: fullPath)
                 result.append(DiscoveredSkill(name: entry, path: fullPath, groups: groups))
             }
+        }
+        // If no subdirectories were found as skills, check if this path itself is a skill
+        if result.isEmpty && hasSkillMD(at: path) {
+            let name = (path as NSString).lastPathComponent
+            let groups = parseGroups(from: path)
+            result.append(DiscoveredSkill(name: name, path: path, groups: groups))
         }
         return result
     }

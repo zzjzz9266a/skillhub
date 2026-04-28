@@ -11,7 +11,7 @@ struct Agent: Codable {
 
 extension Agent: Identifiable {}
 
-extension Agent: FetchableRecord, PersistableRecord {
+extension Agent: FetchableRecord, MutablePersistableRecord {
     static let databaseTableName = "agents"
 
     enum Columns {
@@ -30,5 +30,9 @@ extension Agent: FetchableRecord, PersistableRecord {
         container[Columns.configPath] = configPath
         container[Columns.detectedAt] = detectedAt
         container[Columns.hotReloadSupported] = hotReloadSupported
+    }
+
+    mutating func didInsert(_ inserted: InsertionSuccess) {
+        id = inserted.rowID
     }
 }

@@ -80,7 +80,7 @@ struct SkillServiceTests {
 
         let source = try service.install(from: sourcePath, sourceName: "to-delete", sourceLabel: "Delete Me")
 
-        try service.deleteSource(source.id!)
+        try service.deleteSource(source.id)
 
         let sources = try db.dbQueue.read { db in try Source.fetchAll(db) }
         #expect(sources.count == 0)

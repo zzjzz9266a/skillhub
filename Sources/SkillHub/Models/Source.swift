@@ -11,7 +11,7 @@ struct Source: Codable {
 
 extension Source: Identifiable {}
 
-extension Source: FetchableRecord, PersistableRecord {
+extension Source: FetchableRecord, MutablePersistableRecord {
     static let databaseTableName = "sources"
 
     enum Columns {
@@ -30,5 +30,9 @@ extension Source: FetchableRecord, PersistableRecord {
         container[Columns.label] = label
         container[Columns.origin] = origin
         container[Columns.installedAt] = installedAt
+    }
+
+    mutating func didInsert(_ inserted: InsertionSuccess) {
+        id = inserted.rowID
     }
 }

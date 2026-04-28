@@ -14,7 +14,7 @@ struct Skill: Codable {
 
 extension Skill: Identifiable {}
 
-extension Skill: FetchableRecord, PersistableRecord {
+extension Skill: FetchableRecord, MutablePersistableRecord {
     static let databaseTableName = "skills"
 
     enum Columns {
@@ -40,5 +40,9 @@ extension Skill: FetchableRecord, PersistableRecord {
         container[Columns.version] = version
         container[Columns.installedAt] = installedAt
         container[Columns.updatedAt] = updatedAt
+    }
+
+    mutating func didInsert(_ inserted: InsertionSuccess) {
+        id = inserted.rowID
     }
 }

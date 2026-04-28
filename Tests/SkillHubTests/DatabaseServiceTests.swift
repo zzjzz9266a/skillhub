@@ -11,7 +11,7 @@ struct DatabaseServiceTests {
     }
 
     @Test func insertAndFetchSource() throws {
-        var source = Source(id: nil, name: "superpowers", label: "Superpowers", origin: "https://github.com/obra/superpowers.git", installedAt: Date())
+        var source = Source(id: 0, name: "superpowers", label: "Superpowers", origin: "https://github.com/obra/superpowers.git", installedAt: Date())
         try db.dbQueue.write { db in
             try source.insert(db)
         }
@@ -24,11 +24,11 @@ struct DatabaseServiceTests {
     }
 
     @Test func insertAndFetchSkill() throws {
-        let source = Source(id: nil, name: "test", label: "Test", origin: "local", installedAt: Date())
+        var source = Source(id: 0, name: "test", label: "Test", origin: "local", installedAt: Date())
         try db.dbQueue.write { db in
             try source.insert(db)
         }
-        var skill = Skill(id: nil, name: "brainstorming", sourceId: source.id!, installPath: "/tmp/test", groups: ["gsd"], version: "1.0", installedAt: Date(), updatedAt: Date())
+        var skill = Skill(id: 0, name: "brainstorming", sourceId: source.id, installPath: "/tmp/test", groups: ["gsd"], version: "1.0", installedAt: Date(), updatedAt: Date())
         try db.dbQueue.write { db in
             try skill.insert(db)
         }
@@ -41,7 +41,7 @@ struct DatabaseServiceTests {
     }
 
     @Test func insertAndFetchAgent() throws {
-        var agent = Agent(id: nil, name: "Claude Code", configPath: "~/.claude/", detectedAt: Date(), hotReloadSupported: true)
+        var agent = Agent(id: 0, name: "Claude Code", configPath: "~/.claude/", detectedAt: Date(), hotReloadSupported: true)
         try db.dbQueue.write { db in
             try agent.insert(db)
         }
@@ -54,14 +54,14 @@ struct DatabaseServiceTests {
     }
 
     @Test func agentSkillToggle() throws {
-        let source = Source(id: nil, name: "test", label: "Test", origin: "local", installedAt: Date())
+        var source = Source(id: 0, name: "test", label: "Test", origin: "local", installedAt: Date())
         try db.dbQueue.write { db in try source.insert(db) }
-        var skill = Skill(id: nil, name: "test-skill", sourceId: source.id!, installPath: "/tmp/test", groups: [], version: nil, installedAt: Date(), updatedAt: Date())
+        var skill = Skill(id: 0, name: "test-skill", sourceId: source.id, installPath: "/tmp/test", groups: [], version: nil, installedAt: Date(), updatedAt: Date())
         try db.dbQueue.write { db in try skill.insert(db) }
-        var agent = Agent(id: nil, name: "TestAgent", configPath: nil, detectedAt: Date(), hotReloadSupported: true)
+        var agent = Agent(id: 0, name: "TestAgent", configPath: nil, detectedAt: Date(), hotReloadSupported: true)
         try db.dbQueue.write { db in try agent.insert(db) }
 
-        var agentSkill = AgentSkill(agentId: agent.id!, skillId: skill.id!, enabled: true)
+        var agentSkill = AgentSkill(agentId: agent.id, skillId: skill.id, enabled: true)
         try db.dbQueue.write { db in try agentSkill.save(db) }
 
         let states = try db.dbQueue.read { db in

@@ -20,7 +20,7 @@ struct SyncServiceTests {
     }
 
     private func createFixture() throws -> (sourceId: Int64, skillId: Int64, agentId: Int64, agentSkillDir: String) {
-        var source = Source(id: nil, name: "test-src", label: "Test", origin: "local", installedAt: Date())
+        var source = Source(id: 0, name: "test-src", label: "Test", origin: "local", installedAt: Date())
         try db.dbQueue.write { db in try source.insert(db) }
         source = try db.dbQueue.read { db in try Source.fetchOne(db)! }
 
@@ -28,18 +28,18 @@ struct SyncServiceTests {
         try FileManager.default.createDirectory(atPath: skillPath, withIntermediateDirectories: true)
         try "test content".write(toFile: (skillPath as NSString).appendingPathComponent("SKILL.md"), atomically: true, encoding: .utf8)
 
-        var skill = Skill(id: nil, name: "my-skill", sourceId: source.id!, installPath: skillPath, groups: [], version: nil, installedAt: Date(), updatedAt: Date())
+        var skill = Skill(id: 0, name: "my-skill", sourceId: source.id, installPath: skillPath, groups: [], version: nil, installedAt: Date(), updatedAt: Date())
         try db.dbQueue.write { db in try skill.insert(db) }
         skill = try db.dbQueue.read { db in try Skill.fetchOne(db)! }
 
-        var agent = Agent(id: nil, name: "TestAgent", configPath: nil, detectedAt: Date(), hotReloadSupported: true)
+        var agent = Agent(id: 0, name: "TestAgent", configPath: nil, detectedAt: Date(), hotReloadSupported: true)
         try db.dbQueue.write { db in try agent.insert(db) }
         agent = try db.dbQueue.read { db in try Agent.fetchOne(db)! }
 
         let agentSkillDir = (tempHome as NSString).appendingPathComponent(".claude/skills")
         try FileManager.default.createDirectory(atPath: agentSkillDir, withIntermediateDirectories: true)
 
-        return (source.id!, skill.id!, agent.id!, agentSkillDir)
+        return (source.id, skill.id, agent.id, agentSkillDir)
     }
 
     @Test func enableSkillCreatesSymlink() throws {
@@ -77,7 +77,7 @@ struct SyncServiceTests {
         let skill2Path = (skillsRoot as NSString).appendingPathComponent("test-src/skill-2")
         try FileManager.default.createDirectory(atPath: skill2Path, withIntermediateDirectories: true)
         try "content".write(toFile: (skill2Path as NSString).appendingPathComponent("SKILL.md"), atomically: true, encoding: .utf8)
-        var skill2 = Skill(id: nil, name: "skill-2", sourceId: sourceId, installPath: skill2Path, groups: [], version: nil, installedAt: Date(), updatedAt: Date())
+        var skill2 = Skill(id: 0, name: "skill-2", sourceId: sourceId, installPath: skill2Path, groups: [], version: nil, installedAt: Date(), updatedAt: Date())
         try db.dbQueue.write { db in try skill2.insert(db) }
 
         try sync.enableSource(sourceId: sourceId, agentId: agentId, agentSkillsDir: agentSkillDir)

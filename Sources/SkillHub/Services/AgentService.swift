@@ -42,7 +42,7 @@ final class AgentService {
 
         try? database.dbQueue.write { db in
             try Agent.deleteAll(db)
-            for agent in found {
+            for var agent in found {
                 try agent.insert(db)
             }
         }
