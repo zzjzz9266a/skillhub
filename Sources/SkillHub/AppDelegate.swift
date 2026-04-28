@@ -4,11 +4,15 @@ import Combine
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     var menuBarView: MenuBarView?
-    var viewModel: AppViewModel!
+    let viewModel: AppViewModel
     private var fileWatcherStream: FSEventStreamRef?
 
-    func applicationDidFinishLaunching(_ notification: Notification) {
+    override init() {
         viewModel = AppViewModel()
+        super.init()
+    }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
         menuBarView = MenuBarView(viewModel: viewModel)
         viewModel.refresh()
         menuBarView?.buildMenu()
