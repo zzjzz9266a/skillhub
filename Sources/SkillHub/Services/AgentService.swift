@@ -47,7 +47,9 @@ final class AgentService {
             }
         }
 
-        return found
+        return (try? database.dbQueue.read { db in
+            try Agent.fetchAll(db)
+        }) ?? []
     }
 
     func listAgents() throws -> [Agent] {
