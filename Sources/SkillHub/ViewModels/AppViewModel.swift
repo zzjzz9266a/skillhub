@@ -48,8 +48,8 @@ final class AppViewModel: ObservableObject {
 
     private func refreshAllAgentStates() {
         for agent in agents {
-            let states = (try? syncService.getAgentSkillStates(agentId: agent.id!)) ?? [:]
-            agentSkillStates[agent.id!] = states
+            let states = (try? syncService.getAgentSkillStates(agentId: agent.id)) ?? [:]
+            agentSkillStates[agent.id] = states
         }
     }
 
@@ -83,14 +83,14 @@ final class AppViewModel: ObservableObject {
         let sourceSkills = skills.filter { $0.sourceId == sourceId }
         for skill in sourceSkills {
             if enabled {
-                try? syncService.enableSkill(skillId: skill.id!, agentId: agentId, agentSkillsDir: skillsDir)
+                try? syncService.enableSkill(skillId: skill.id, agentId: agentId, agentSkillsDir: skillsDir)
             } else {
-                try? syncService.disableSkill(skillId: skill.id!, agentId: agentId, agentSkillsDir: skillsDir)
+                try? syncService.disableSkill(skillId: skill.id, agentId: agentId, agentSkillsDir: skillsDir)
             }
         }
 
         for skill in sourceSkills {
-            agentSkillStates[agentId, default: [:]][skill.id!] = enabled
+            agentSkillStates[agentId, default: [:]][skill.id] = enabled
         }
     }
 
@@ -101,14 +101,14 @@ final class AppViewModel: ObservableObject {
         let groupSkills = skills.filter { $0.sourceId == sourceId && $0.groups.contains(groupName) }
         for skill in groupSkills {
             if enabled {
-                try? syncService.enableSkill(skillId: skill.id!, agentId: agentId, agentSkillsDir: skillsDir)
+                try? syncService.enableSkill(skillId: skill.id, agentId: agentId, agentSkillsDir: skillsDir)
             } else {
-                try? syncService.disableSkill(skillId: skill.id!, agentId: agentId, agentSkillsDir: skillsDir)
+                try? syncService.disableSkill(skillId: skill.id, agentId: agentId, agentSkillsDir: skillsDir)
             }
         }
 
         for skill in groupSkills {
-            agentSkillStates[agentId, default: [:]][skill.id!] = enabled
+            agentSkillStates[agentId, default: [:]][skill.id] = enabled
         }
     }
 

@@ -33,7 +33,6 @@ final class AgentService {
             }
             guard exists else { return nil }
             return Agent(
-                id: nil,
                 name: def.name,
                 configPath: def.configPaths.first.map { (homePath as NSString).appendingPathComponent($0) },
                 detectedAt: Date(),

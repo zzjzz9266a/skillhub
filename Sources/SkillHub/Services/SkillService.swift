@@ -18,7 +18,7 @@ final class SkillService {
     func install(from inputPath: String, sourceName: String, sourceLabel: String) throws -> Source {
         let expanded = (inputPath as NSString).expandingTildeInPath
 
-        var source = Source(id: nil, name: sourceName, label: sourceLabel, origin: expanded, installedAt: Date())
+        var source = Source(name: sourceName, label: sourceLabel, origin: expanded, installedAt: Date())
         try database.dbQueue.write { db in
             if let existing = try Source.filter(Source.Columns.name == sourceName).fetchOne(db) {
                 source.id = existing.id
@@ -26,7 +26,7 @@ final class SkillService {
             } else {
                 try source.insert(db)
             }
-            if source.id == nil {
+            if source.id == 0 {
                 source = try Source.filter(Source.Columns.name == sourceName).fetchOne(db)!
             }
         }
@@ -43,9 +43,8 @@ final class SkillService {
             try FileManager.default.copyItem(atPath: skill.path, toPath: destPath)
 
             let record = Skill(
-                id: nil,
                 name: skill.name,
-                sourceId: source.id!,
+                sourceId: source.id,
                 installPath: destPath,
                 groups: skill.groups,
                 version: nil,

@@ -53,7 +53,7 @@ final class SyncService {
         }
         for skill in skills {
             do {
-                try enableSkill(skillId: skill.id!, agentId: agentId, agentSkillsDir: agentSkillsDir)
+                try enableSkill(skillId: skill.id, agentId: agentId, agentSkillsDir: agentSkillsDir)
             } catch {
                 print("Failed to enable \(skill.name): \(error)")
             }
@@ -67,7 +67,7 @@ final class SyncService {
         let groupedSkills = skills.filter { $0.groups.contains(groupName) }
         for skill in groupedSkills {
             do {
-                try enableSkill(skillId: skill.id!, agentId: agentId, agentSkillsDir: agentSkillsDir)
+                try enableSkill(skillId: skill.id, agentId: agentId, agentSkillsDir: agentSkillsDir)
             } catch {
                 print("Failed to enable \(skill.name): \(error)")
             }

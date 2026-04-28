@@ -2,12 +2,14 @@ import GRDB
 import Foundation
 
 struct Agent: Codable {
-    var id: Int64?
+    var id: Int64 = 0
     var name: String
     var configPath: String?
     var detectedAt: Date
     var hotReloadSupported: Bool
 }
+
+extension Agent: Identifiable {}
 
 extension Agent: FetchableRecord, PersistableRecord {
     static let databaseTableName = "agents"
@@ -18,5 +20,15 @@ extension Agent: FetchableRecord, PersistableRecord {
         static let configPath = Column(CodingKeys.configPath)
         static let detectedAt = Column(CodingKeys.detectedAt)
         static let hotReloadSupported = Column(CodingKeys.hotReloadSupported)
+    }
+
+    func encode(to container: inout PersistenceContainer) {
+        if id != 0 {
+            container[Columns.id] = id
+        }
+        container[Columns.name] = name
+        container[Columns.configPath] = configPath
+        container[Columns.detectedAt] = detectedAt
+        container[Columns.hotReloadSupported] = hotReloadSupported
     }
 }

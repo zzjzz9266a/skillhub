@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "SkillHub",
-    platforms: [.macOS(.v13)],
+    platforms: [.macOS(.v14)],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "6.24.0"),
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.1.0"),
