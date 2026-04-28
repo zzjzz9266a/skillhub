@@ -1,11 +1,12 @@
 import AppKit
 
-final class MenuBarView {
+final class MenuBarView: NSObject {
     private var statusItem: NSStatusItem!
     private weak var viewModel: AppViewModel?
 
     init(viewModel: AppViewModel) {
         self.viewModel = viewModel
+        super.init()
         setupStatusItem()
     }
 
