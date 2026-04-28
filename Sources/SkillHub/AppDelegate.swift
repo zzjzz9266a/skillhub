@@ -2,9 +2,10 @@ import AppKit
 import SwiftUI
 import Combine
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var menuBarView: MenuBarView?
     let viewModel: AppViewModel
+    private weak var mainWindow: NSWindow?
     private var fileWatcherStream: FSEventStreamRef?
 
     override init() {
@@ -18,18 +19,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menuBarView?.buildMenu()
 
         setupFileWatcher()
+
+        createMainWindow()
     }
 
     func openMainWindow() {
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
-        for window in NSApp.windows {
-            if window.canBecomeKey, !(window is NSPanel) {
-                window.makeKeyAndOrderFront(nil)
-                return
+        if let window = mainWindow {
+            if window.isMiniaturized {
+                window.deminiaturize(nil)
             }
+            NSApp.setActivationPolicy(.regular)
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+        } else {
+            // Window was destroyed — recreate it
+            createMainWindow()
+            openMainWindow()
         }
     }
+
+    private func createMainWindow() {
+        let contentView = ContentView().environmentObject(viewModel)
+        let hostingController = NSHostingController(rootView: contentView)
+
+        let window = NSWindow(contentViewController: hostingController)
+        window.title = "SkillHub"
+        window.setContentSize(NSSize(width: 800, height: 600))
+        window.minSize = NSSize(width: 600, height: 400)
+        window.delegate = self
+        window.styleMask.insert(.resizable)
+        window.styleMask.insert(.fullSizeContentView)
+        window.isReleasedWhenClosed = false
+        mainWindow = window
+
+        window.makeKeyAndOrderFront(nil)
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    // MARK: - NSWindowDelegate
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        if sender === mainWindow {
+            sender.orderOut(nil)
+            return false
+        }
+        return true
+    }
+
+    // MARK: - FSEvents
 
     private func setupFileWatcher() {
         let hubPath = FileManager.default.homeDirectoryForCurrentUser
