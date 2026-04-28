@@ -75,7 +75,7 @@ final class MenuBarView {
     }
 
     @objc private func openMainWindow() {
-        (NSApp.delegate as? AppDelegate)?.openMainWindow()
+        (NSApp.delegate as? AppDelegate)?.showMainWindow()
     }
 
     @objc private func refresh() {

@@ -5,7 +5,7 @@ import Combine
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var menuBarView: MenuBarView?
     let viewModel: AppViewModel
-    private weak var mainWindow: NSWindow?
+    private var mainWindow: NSWindow?
     private var fileWatcherStream: FSEventStreamRef?
 
     override init() {
@@ -14,28 +14,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.regular)
+
         menuBarView = MenuBarView(viewModel: viewModel)
         viewModel.refresh()
         menuBarView?.buildMenu()
 
         setupFileWatcher()
-
-        createMainWindow()
+        showMainWindow()
     }
 
-    func openMainWindow() {
-        if let window = mainWindow {
-            if window.isMiniaturized {
-                window.deminiaturize(nil)
-            }
-            NSApp.setActivationPolicy(.regular)
-            NSApp.activate(ignoringOtherApps: true)
-            window.makeKeyAndOrderFront(nil)
-        } else {
-            // Window was destroyed — recreate it
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        showMainWindow()
+        return true
+    }
+
+    func showMainWindow() {
+        if mainWindow == nil {
             createMainWindow()
-            openMainWindow()
         }
+        guard let window = mainWindow else { return }
+
+        if window.isMiniaturized {
+            window.deminiaturize(nil)
+        }
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
     }
 
     private func createMainWindow() {
@@ -47,14 +52,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.setContentSize(NSSize(width: 800, height: 600))
         window.minSize = NSSize(width: 600, height: 400)
         window.delegate = self
-        window.styleMask.insert(.resizable)
-        window.styleMask.insert(.fullSizeContentView)
         window.isReleasedWhenClosed = false
+        window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+        window.center()
         mainWindow = window
-
-        window.makeKeyAndOrderFront(nil)
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
     }
 
     // MARK: - NSWindowDelegate
