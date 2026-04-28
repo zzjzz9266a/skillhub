@@ -6,7 +6,7 @@ struct SkillHubApp: App {
 
     var body: some Scene {
         WindowGroup {
-            Text("SkillHub")
+            ContentView()
                 .frame(minWidth: 800, minHeight: 600)
         }
     }
