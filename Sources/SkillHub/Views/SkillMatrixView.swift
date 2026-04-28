@@ -17,7 +17,7 @@ struct SkillMatrixView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            ScrollView([.horizontal, .vertical]) {
+            ScrollView([.vertical]) {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 0) {
                         Text("Skill")

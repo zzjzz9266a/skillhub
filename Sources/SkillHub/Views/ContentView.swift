@@ -4,9 +4,9 @@ struct ContentView: View {
     @EnvironmentObject var viewModel: AppViewModel
 
     var body: some View {
-        HSplitView {
+        HStack(spacing: 0) {
             SidebarView(viewModel: viewModel)
-                .frame(minWidth: 180, idealWidth: 220)
+                .frame(width: 220)
 
             VStack(spacing: 0) {
                 if let sourceId = viewModel.selectedSourceId,
