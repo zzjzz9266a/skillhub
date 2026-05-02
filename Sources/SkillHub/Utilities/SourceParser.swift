@@ -18,15 +18,18 @@ enum SourceParser {
             return .git(url: trimmed)
         }
 
-        // npm: @scope/name or package-name (no slashes, no dots as path)
-        if trimmed.hasPrefix("@") && trimmed.contains("/") {
-            return .npm(name: trimmed)
-        }
-
         // local: must be an existing directory
         var isDirectory: ObjCBool = false
         if FileManager.default.fileExists(atPath: trimmed, isDirectory: &isDirectory), isDirectory.boolValue {
             return .local(path: trimmed)
+        }
+
+        // npm: @scope/name or package-name (no slashes)
+        if trimmed.hasPrefix("@") && trimmed.contains("/") {
+            return .npm(name: trimmed)
+        }
+        if trimmed.range(of: #"^[A-Za-z0-9][A-Za-z0-9._-]*$"#, options: .regularExpression) != nil {
+            return .npm(name: trimmed)
         }
 
         return nil

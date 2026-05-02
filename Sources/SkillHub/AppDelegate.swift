@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         menuBarView = MenuBarView(viewModel: viewModel)
         viewModel.refresh()
+        menuBarView?.updateButtonTitle()
         menuBarView?.buildMenu()
 
         setupFileWatcher()
@@ -87,8 +88,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             { (_, info, _, _, _, _) in
                 guard let info = info else { return }
                 let delegate = Unmanaged<AppDelegate>.fromOpaque(info).takeUnretainedValue()
+                guard Date().timeIntervalSince(delegate.viewModel.lastLocalWrite) >= 2.0 else { return }
                 DispatchQueue.main.async {
                     delegate.viewModel.refresh()
+                    delegate.menuBarView?.updateButtonTitle()
+                    delegate.menuBarView?.buildMenu()
                 }
             },
             &context,

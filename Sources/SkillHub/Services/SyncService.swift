@@ -64,7 +64,7 @@ final class SyncService {
         let skills = try database.dbQueue.read { db in
             try Skill.filter(Skill.Columns.sourceId == sourceId).fetchAll(db)
         }
-        let groupedSkills = skills.filter { $0.groups.contains(groupName) }
+        let groupedSkills = skills.filter { $0.belongsToGroup(groupName) }
         for skill in groupedSkills {
             do {
                 try enableSkill(skillId: skill.id, agentId: agentId, agentSkillsDir: agentSkillsDir)
@@ -74,11 +74,47 @@ final class SyncService {
         }
     }
 
+    func disableSource(sourceId: Int64, agentId: Int64, agentSkillsDir: String) throws {
+        let skills = try database.dbQueue.read { db in
+            try Skill.filter(Skill.Columns.sourceId == sourceId).fetchAll(db)
+        }
+        for skill in skills {
+            do {
+                try disableSkill(skillId: skill.id, agentId: agentId, agentSkillsDir: agentSkillsDir)
+            } catch {
+                print("Failed to disable \(skill.name): \(error)")
+            }
+        }
+    }
+
+    func disableGroup(sourceId: Int64, groupName: String, agentId: Int64, agentSkillsDir: String) throws {
+        let skills = try database.dbQueue.read { db in
+            try Skill.filter(Skill.Columns.sourceId == sourceId).fetchAll(db)
+        }
+        let groupedSkills = skills.filter { $0.belongsToGroup(groupName) }
+        for skill in groupedSkills {
+            do {
+                try disableSkill(skillId: skill.id, agentId: agentId, agentSkillsDir: agentSkillsDir)
+            } catch {
+                print("Failed to disable \(skill.name): \(error)")
+            }
+        }
+    }
+
     func getAgentSkillStates(agentId: Int64) throws -> [Int64: Bool] {
         let records = try database.dbQueue.read { db in
             try AgentSkill.filter(AgentSkill.Columns.agentId == agentId).fetchAll(db)
         }
         return Dictionary(uniqueKeysWithValues: records.map { ($0.skillId, $0.enabled) })
+    }
+}
+
+private extension Skill {
+    func belongsToGroup(_ groupName: String) -> Bool {
+        if groups.isEmpty {
+            return groupName == "ungrouped"
+        }
+        return groups.contains(groupName)
     }
 }
 

@@ -90,4 +90,16 @@ struct SyncServiceTests {
         #expect(FileManager.default.fileExists(atPath: (agentSkillDir as NSString).appendingPathComponent("my-skill")))
         #expect(FileManager.default.fileExists(atPath: (agentSkillDir as NSString).appendingPathComponent("skill-2")))
     }
+
+    @Test func batchEnableUngroupedGroup() throws {
+        let (sourceId, skillId, agentId, agentSkillDir) = try createFixture()
+
+        try sync.enableGroup(sourceId: sourceId, groupName: "ungrouped", agentId: agentId, agentSkillsDir: agentSkillDir)
+
+        let state = try db.dbQueue.read { db in
+            try AgentSkill.filter(AgentSkill.Columns.agentId == agentId && AgentSkill.Columns.skillId == skillId).fetchOne(db)
+        }
+        #expect(state?.enabled == true)
+        #expect(FileManager.default.fileExists(atPath: (agentSkillDir as NSString).appendingPathComponent("my-skill")))
+    }
 }

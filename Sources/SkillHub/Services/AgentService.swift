@@ -41,9 +41,25 @@ final class AgentService {
         }
 
         try? database.dbQueue.write { db in
-            try Agent.deleteAll(db)
+            let existing = (try? Agent.fetchAll(db)) ?? []
+            var existingByName: [String: Agent] = [:]
+            for agent in existing {
+                existingByName[agent.name] = agent
+            }
+            let foundNames = Set(found.map(\.name))
+
             for var agent in found {
-                try agent.insert(db)
+                if let match = existingByName[agent.name] {
+                    agent.id = match.id
+                }
+                try agent.save(db)
+            }
+
+            let staleNames = Set(existingByName.keys).subtracting(foundNames)
+            for name in staleNames {
+                if let agent = existingByName[name] {
+                    try Agent.deleteOne(db, key: agent.id)
+                }
             }
         }
 

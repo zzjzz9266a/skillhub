@@ -30,6 +30,15 @@ struct SourceParserTests {
         #expect(name == "@scope/package-name")
     }
 
+    @Test func npmUnscopedPackageName() {
+        let result = SourceParser.parse("package-name")
+        guard case .npm(let name) = result else {
+            Issue.record("Expected npm, got \(String(describing: result))")
+            return
+        }
+        #expect(name == "package-name")
+    }
+
     @Test func localDirectory() {
         let tmpDir = FileManager.default.temporaryDirectory.path
         let result = SourceParser.parse(tmpDir)
@@ -41,7 +50,7 @@ struct SourceParserTests {
     }
 
     @Test func invalidInput() {
-        let result = SourceParser.parse("not-a-valid-source")
+        let result = SourceParser.parse("not/a/local/path")
         #expect(result == nil)
     }
 }

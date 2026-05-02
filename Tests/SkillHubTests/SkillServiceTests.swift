@@ -61,6 +61,27 @@ struct SkillServiceTests {
         #expect(names == ["skill-a", "skill-b"])
     }
 
+    @Test func reinstallSameSourceReplacesOldSkills() throws {
+        let sourceDir = (tempDir as NSString).appendingPathComponent("replace-source")
+        try FileManager.default.createDirectory(atPath: sourceDir, withIntermediateDirectories: true)
+
+        let oldSkillDir = (sourceDir as NSString).appendingPathComponent("old-skill")
+        try FileManager.default.createDirectory(atPath: oldSkillDir, withIntermediateDirectories: true)
+        try "# Old Skill".write(toFile: (oldSkillDir as NSString).appendingPathComponent("SKILL.md"), atomically: true, encoding: .utf8)
+
+        _ = try service.install(from: sourceDir, sourceName: "replace", sourceLabel: "Replace")
+
+        try FileManager.default.removeItem(atPath: oldSkillDir)
+        let newSkillDir = (sourceDir as NSString).appendingPathComponent("new-skill")
+        try FileManager.default.createDirectory(atPath: newSkillDir, withIntermediateDirectories: true)
+        try "# New Skill".write(toFile: (newSkillDir as NSString).appendingPathComponent("SKILL.md"), atomically: true, encoding: .utf8)
+
+        _ = try service.install(from: sourceDir, sourceName: "replace", sourceLabel: "Replace")
+
+        let skills = try db.dbQueue.read { db in try Skill.fetchAll(db) }
+        #expect(skills.map(\.name) == ["new-skill"])
+    }
+
     @Test func getExistingSource() throws {
         let sourcePath = (tempDir as NSString).appendingPathComponent("exist-source")
         try FileManager.default.createDirectory(atPath: sourcePath, withIntermediateDirectories: true)

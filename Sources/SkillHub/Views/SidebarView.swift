@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SidebarView: View {
     @ObservedObject var viewModel: AppViewModel
+    @State private var deleteConfirmation: Source?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -40,6 +41,13 @@ struct SidebarView: View {
                             .cornerRadius(4)
                         }
                         .buttonStyle(.plain)
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                deleteConfirmation = source
+                            } label: {
+                                Label("Delete \"\(source.label)\"", systemImage: "trash")
+                            }
+                        }
                     }
                 }
                 .padding(.horizontal, 4)
@@ -71,6 +79,24 @@ struct SidebarView: View {
             Spacer()
         }
         .frame(minWidth: 180)
+        .alert("Delete Source", isPresented: Binding(
+            get: { deleteConfirmation != nil },
+            set: { if !$0 { deleteConfirmation = nil } }
+        )) {
+            Button("Delete", role: .destructive) {
+                if let source = deleteConfirmation {
+                    viewModel.deleteSource(source.id)
+                    deleteConfirmation = nil
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                deleteConfirmation = nil
+            }
+        } message: {
+            if let source = deleteConfirmation {
+                Text("Remove \"\(source.label)\" and all its skills from SkillHub? This will not delete the original source files.")
+            }
+        }
     }
 
     private func agentStatusColor(_ agent: Agent) -> Color {
