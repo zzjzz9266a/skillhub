@@ -14,6 +14,19 @@ struct PreviewInstallView: View {
                     .foregroundColor(.secondary)
             }
 
+            if viewModel.previewIsReinstall {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                    Text("This source is already installed. Reinstalling will replace all its skills.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding(10)
+                .background(Color.orange.opacity(0.1))
+                .cornerRadius(6)
+            }
+
             if viewModel.previewSkills.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle")
@@ -68,7 +81,7 @@ struct PreviewInstallView: View {
 
                 Spacer()
 
-                Button("Install") {
+                Button(viewModel.previewIsReinstall ? "Reinstall" : "Install") {
                     viewModel.confirmInstall()
                 }
                 .disabled(viewModel.previewSkills.isEmpty)

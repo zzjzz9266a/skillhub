@@ -41,7 +41,7 @@ struct DatabaseServiceTests {
     }
 
     @Test func insertAndFetchAgent() throws {
-        var agent = Agent(id: 0, name: "Claude Code", configPath: "~/.claude/", detectedAt: Date(), hotReloadSupported: true)
+        var agent = Agent(id: 0, name: "Claude Code", configPath: "~/.claude/", detectedAt: Date(), hotReloadSupported: true, visible: true, installed: true)
         try db.dbQueue.write { db in
             try agent.insert(db)
         }
@@ -58,7 +58,7 @@ struct DatabaseServiceTests {
         try db.dbQueue.write { db in try source.insert(db) }
         var skill = Skill(id: 0, name: "test-skill", sourceId: source.id, installPath: "/tmp/test", groups: [], version: nil, installedAt: Date(), updatedAt: Date())
         try db.dbQueue.write { db in try skill.insert(db) }
-        var agent = Agent(id: 0, name: "TestAgent", configPath: nil, detectedAt: Date(), hotReloadSupported: true)
+        var agent = Agent(id: 0, name: "TestAgent", configPath: nil, detectedAt: Date(), hotReloadSupported: true, visible: true, installed: true)
         try db.dbQueue.write { db in try agent.insert(db) }
 
         var agentSkill = AgentSkill(agentId: agent.id, skillId: skill.id, enabled: true)

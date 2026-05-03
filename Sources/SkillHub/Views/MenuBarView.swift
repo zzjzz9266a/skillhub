@@ -18,7 +18,7 @@ final class MenuBarView: NSObject {
 
     func updateButtonTitle() {
         guard let button = statusItem.button else { return }
-        let count = viewModel?.agents.count ?? 0
+        let count = viewModel?.visibleAgents.count ?? 0
         button.image = NSImage(systemSymbolName: "hammer.fill", accessibilityDescription: "SkillHub")
         if count > 0 {
             button.title = " \(count)"
@@ -37,14 +37,14 @@ final class MenuBarView: NSObject {
         }
 
         // Agent status section
-        if !vm.agents.isEmpty {
+        if !vm.visibleAgents.isEmpty {
             let agentHeader = NSMenuItem(title: "Agents", action: nil, keyEquivalent: "")
             agentHeader.isEnabled = false
             agentHeader.attributedTitle = makeHeader("Agents")
             menu.addItem(agentHeader)
 
-            for agent in vm.agents {
-                let indicator = agent.hotReloadSupported ? "●" : "◉"
+            for agent in vm.visibleAgents {
+                let indicator = agent.installed ? "●" : "○"
                 let item = NSMenuItem(title: "  \(indicator) \(agent.name)", action: nil, keyEquivalent: "")
                 item.isEnabled = false
                 menu.addItem(item)
@@ -55,7 +55,7 @@ final class MenuBarView: NSObject {
 
         // Skills by source
         if !vm.sources.isEmpty {
-            let primaryAgent = vm.agents.first
+            let primaryAgent = vm.visibleAgents.first
 
             for source in vm.sources {
                 let sourceItem = NSMenuItem(title: source.label, action: nil, keyEquivalent: "")

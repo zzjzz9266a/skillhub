@@ -7,6 +7,8 @@ struct Agent: Codable {
     var configPath: String?
     var detectedAt: Date
     var hotReloadSupported: Bool
+    var visible: Bool
+    var installed: Bool
 }
 
 extension Agent: Identifiable {}
@@ -20,6 +22,8 @@ extension Agent: FetchableRecord, MutablePersistableRecord {
         static let configPath = Column(CodingKeys.configPath)
         static let detectedAt = Column(CodingKeys.detectedAt)
         static let hotReloadSupported = Column(CodingKeys.hotReloadSupported)
+        static let visible = Column(CodingKeys.visible)
+        static let installed = Column(CodingKeys.installed)
     }
 
     func encode(to container: inout PersistenceContainer) {
@@ -30,6 +34,8 @@ extension Agent: FetchableRecord, MutablePersistableRecord {
         container[Columns.configPath] = configPath
         container[Columns.detectedAt] = detectedAt
         container[Columns.hotReloadSupported] = hotReloadSupported
+        container[Columns.visible] = visible
+        container[Columns.installed] = installed
     }
 
     mutating func didInsert(_ inserted: InsertionSuccess) {

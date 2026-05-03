@@ -61,6 +61,12 @@ final class DatabaseService {
                 t.primaryKey(["agentId", "skillId"])
             }
         }
+        migrator.registerMigration("v2") { db in
+            try db.alter(table: "agents") { t in
+                t.add(column: "visible", .boolean).notNull().defaults(to: true)
+                t.add(column: "installed", .boolean).notNull().defaults(to: true)
+            }
+        }
         try migrator.migrate(dbQueue)
     }
 }

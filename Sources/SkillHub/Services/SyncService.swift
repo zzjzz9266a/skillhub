@@ -18,9 +18,7 @@ final class SyncService {
         }
 
         let linkPath = (agentSkillsDir as NSString).appendingPathComponent(skill.name)
-        if FileManager.default.fileExists(atPath: linkPath) {
-            try FileManager.default.removeItem(atPath: linkPath)
-        }
+        try removeManagedLinkIfPresent(atPath: linkPath, expectedDestination: skill.installPath)
         try FileManager.default.createSymbolicLink(atPath: linkPath, withDestinationPath: skill.installPath)
 
         let agentSkill = AgentSkill(agentId: agentId, skillId: skillId, enabled: true)
@@ -37,9 +35,7 @@ final class SyncService {
         }
 
         let linkPath = (agentSkillsDir as NSString).appendingPathComponent(skill.name)
-        if FileManager.default.fileExists(atPath: linkPath) {
-            try FileManager.default.removeItem(atPath: linkPath)
-        }
+        try removeManagedLinkIfPresent(atPath: linkPath, expectedDestination: skill.installPath)
 
         let agentSkill = AgentSkill(agentId: agentId, skillId: skillId, enabled: false)
         try database.dbQueue.write { db in
@@ -107,6 +103,20 @@ final class SyncService {
         }
         return Dictionary(uniqueKeysWithValues: records.map { ($0.skillId, $0.enabled) })
     }
+
+    private func removeManagedLinkIfPresent(atPath path: String, expectedDestination: String) throws {
+        if let destination = try? FileManager.default.destinationOfSymbolicLink(atPath: path) {
+            guard destination == expectedDestination else {
+                throw SyncError.unmanagedPathExists(path: path)
+            }
+            try FileManager.default.removeItem(atPath: path)
+            return
+        }
+
+        if FileManager.default.fileExists(atPath: path) {
+            throw SyncError.unmanagedPathExists(path: path)
+        }
+    }
 }
 
 private extension Skill {
@@ -120,10 +130,13 @@ private extension Skill {
 
 enum SyncError: LocalizedError {
     case skillNotFound
+    case unmanagedPathExists(path: String)
 
     var errorDescription: String? {
         switch self {
         case .skillNotFound: return "Skill not found in database"
+        case .unmanagedPathExists(let path):
+            return "A non-SkillHub item already exists at \(path)"
         }
     }
 }

@@ -22,6 +22,7 @@ final class SkillService {
         // Resolve scan path first (clone if git) so failures don't leave stale DB records
         let scanPath: String
         var tempDir: String?
+        let rootSkillName: String?
 
         switch sourceType {
         case .git(let url):
@@ -30,8 +31,10 @@ final class SkillService {
             try cloneGit(url: url, to: cloneDir)
             tempDir = cloneDir
             scanPath = cloneDir
+            rootSkillName = sourceName
         case .local(let path):
             scanPath = path
+            rootSkillName = nil
         case .npm:
             throw SkillServiceError.unsupportedSource("npm packages are not yet supported")
         case nil:
@@ -42,7 +45,7 @@ final class SkillService {
             if let dir = tempDir { try? FileManager.default.removeItem(atPath: dir) }
         }
 
-        let discoveredSkills = findInternalSkills(at: scanPath)
+        let discoveredSkills = findInternalSkills(at: scanPath, rootSkillName: rootSkillName)
 
         // Prepare local store
         let targetDir = (skillsStorePath as NSString)
@@ -204,6 +207,7 @@ final class SkillService {
 
         let scanPath: String
         var tempDir: String?
+        let rootSkillName: String?
 
         switch sourceType {
         case .git(let url):
@@ -212,15 +216,17 @@ final class SkillService {
             try cloneGit(url: url, to: cloneDir)
             tempDir = cloneDir
             scanPath = cloneDir
+            rootSkillName = suggestedSourceName(from: normalized)
         case .local(let path):
             scanPath = path
+            rootSkillName = nil
         case .npm:
             throw SkillServiceError.unsupportedSource("npm packages are not yet supported")
         case nil:
             throw SkillServiceError.invalidSource("unable to determine source type for: \(normalized)")
         }
 
-        let skills = findSkills(at: scanPath)
+        let skills = findSkills(at: scanPath, rootSkillName: rootSkillName)
         return ResolvedSource(scanPath: scanPath, originalInput: normalized, skills: skills, tempDir: tempDir)
     }
 
@@ -232,15 +238,15 @@ final class SkillService {
         let groups: [String]
     }
 
-    private func findSkills(at path: String) -> [DiscoveredSkill] {
-        return findInternalSkills(at: path).map { DiscoveredSkill(name: $0.name, groups: $0.groups, path: $0.path) }
+    private func findSkills(at path: String, rootSkillName: String? = nil) -> [DiscoveredSkill] {
+        return findInternalSkills(at: path, rootSkillName: rootSkillName).map { DiscoveredSkill(name: $0.name, groups: $0.groups, path: $0.path) }
     }
 
-    private func findInternalSkills(at path: String, depth: Int = 0) -> [InternalSkill] {
+    private func findInternalSkills(at path: String, depth: Int = 0, rootSkillName: String? = nil) -> [InternalSkill] {
         var result: [InternalSkill] = []
         guard let entries = try? FileManager.default.contentsOfDirectory(atPath: path) else {
             if hasSkillMD(at: path) {
-                let name = (path as NSString).lastPathComponent
+                let name = rootSkillName ?? (path as NSString).lastPathComponent
                 let groups = parseGroups(from: path)
                 result.append(InternalSkill(name: name, path: path, groups: groups))
             }
@@ -262,11 +268,20 @@ final class SkillService {
         }
         // If no subdirectories were found as skills, check if this path itself is a skill
         if result.isEmpty && hasSkillMD(at: path) {
-            let name = (path as NSString).lastPathComponent
+            let name = rootSkillName ?? (path as NSString).lastPathComponent
             let groups = parseGroups(from: path)
             result.append(InternalSkill(name: name, path: path, groups: groups))
         }
         return result
+    }
+
+    private func suggestedSourceName(from input: String) -> String {
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        let path = trimmed.hasPrefix("git@")
+            ? trimmed.split(separator: ":").last.map(String.init) ?? trimmed
+            : trimmed
+        return (path as NSString).lastPathComponent
+            .replacingOccurrences(of: ".git", with: "")
     }
 
     private func entriesToSkip(_ name: String, at depth: Int) -> Bool {

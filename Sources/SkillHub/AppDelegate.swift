@@ -42,6 +42,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
+        DispatchQueue.main.async {
+            window.makeFirstResponder(nil)
+        }
     }
 
     private func createMainWindow() {
@@ -50,11 +53,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         let window = NSWindow(contentViewController: hostingController)
         window.title = "SkillHub"
-        window.setContentSize(NSSize(width: 800, height: 600))
-        window.minSize = NSSize(width: 600, height: 400)
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.toolbarStyle = .unified
+        window.setContentSize(NSSize(width: 1040, height: 680))
+        window.minSize = NSSize(width: 860, height: 520)
         window.delegate = self
         window.isReleasedWhenClosed = false
-        window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+        window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.center()
         mainWindow = window
     }

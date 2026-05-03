@@ -13,6 +13,7 @@ final class AppViewModel: ObservableObject {
     @Published var isResolving: Bool = false
     @Published var showPreview: Bool = false
     @Published var previewSkills: [SkillService.DiscoveredSkill] = []
+    @Published var previewIsReinstall: Bool = false
     var previewResolvedSource: SkillService.ResolvedSource?
     var previewSourceName: String = ""
     var previewSourceLabel: String = ""
@@ -78,13 +79,18 @@ final class AppViewModel: ObservableObject {
         try? FileManager.default.createDirectory(atPath: skillsDir, withIntermediateDirectories: true)
 
         lastLocalWrite = Date()
-        if enabled {
-            try? syncService.enableSkill(skillId: skillId, agentId: agentId, agentSkillsDir: skillsDir)
-        } else {
-            try? syncService.disableSkill(skillId: skillId, agentId: agentId, agentSkillsDir: skillsDir)
+        do {
+            if enabled {
+                try syncService.enableSkill(skillId: skillId, agentId: agentId, agentSkillsDir: skillsDir)
+            } else {
+                try syncService.disableSkill(skillId: skillId, agentId: agentId, agentSkillsDir: skillsDir)
+            }
+            agentSkillStates[agentId] = try syncService.getAgentSkillStates(agentId: agentId)
+            statusText = enabled ? "Skill enabled" : "Skill disabled"
+        } catch {
+            agentSkillStates[agentId] = (try? syncService.getAgentSkillStates(agentId: agentId)) ?? agentSkillStates[agentId] ?? [:]
+            statusText = "Sync failed: \(error.localizedDescription)"
         }
-
-        agentSkillStates[agentId, default: [:]][skillId] = enabled
     }
 
     func toggleSource(sourceId: Int64, agentId: Int64, enabled: Bool) {
@@ -159,6 +165,8 @@ final class AppViewModel: ObservableObject {
         let sourceName = (input as NSString).lastPathComponent
             .replacingOccurrences(of: ".git", with: "")
 
+        let isReinstall = sources.contains { $0.name == sourceName || $0.origin == input }
+
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             do {
@@ -169,6 +177,7 @@ final class AppViewModel: ObservableObject {
                     self.previewSourceLabel = sourceName
                     self.previewSkills = resolved.skills
                     self.previewResolvedSource = resolved
+                    self.previewIsReinstall = isReinstall || self.sources.contains { $0.name == sourceName || $0.origin == resolved.originalInput }
                     self.showPreview = true
                     self.statusText = resolved.skills.isEmpty
                         ? "No SKILL.md files found in \"\(sourceName)\""
@@ -237,12 +246,26 @@ final class AppViewModel: ObservableObject {
         showPreview = false
         previewSkills = []
         previewResolvedSource = nil
+        previewIsReinstall = false
         statusText = ""
     }
 
     // MARK: - Tree structure for matrix
 
+    @Published var expandedSources: Set<Int64> = []
     @Published var expandedGroups: Set<String> = []
+
+    func isSourceExpanded(sourceId: Int64) -> Bool {
+        expandedSources.contains(sourceId)
+    }
+
+    func toggleSourceExpanded(sourceId: Int64) {
+        if expandedSources.contains(sourceId) {
+            expandedSources.remove(sourceId)
+        } else {
+            expandedSources.insert(sourceId)
+        }
+    }
 
     func groupKey(sourceId: Int64, groupName: String) -> String {
         "\(sourceId)/\(groupName)"
@@ -311,21 +334,29 @@ final class AppViewModel: ObservableObject {
         if let configPath = agent.configPath {
             return (configPath as NSString).appendingPathComponent("skills")
         }
-        let pathMap: [String: String] = [
-            "Claude Code": ".claude",
-            "OpenCode": ".opencode",
-            "Gemini CLI": ".gemini",
-            "Codex": ".codex",
-            "Copilot CLI": ".config/github-copilot",
-        ]
+        let def = AgentService.knownAgents.first { $0.name == agent.name }
+        let relative = def?.configPaths.first ?? ".claude"
         let home = agentService.homePath
-        let relative = pathMap[agent.name] ?? ".claude"
-        return (home as NSString).appendingPathComponent("\(relative)/skills")
+        let configDir = (home as NSString).appendingPathComponent(relative)
+        return (configDir as NSString).appendingPathComponent("skills")
     }
 
     var filteredSkills: [Skill] {
         guard let sourceId = selectedSourceId else { return skills }
         return skills.filter { $0.sourceId == sourceId }
+    }
+
+    var visibleAgents: [Agent] {
+        agents.filter { $0.visible }
+    }
+
+    func toggleAgentVisibility(_ agentId: Int64) {
+        guard let index = agents.firstIndex(where: { $0.id == agentId }) else { return }
+        agents[index].visible.toggle()
+        let agent = agents[index]
+        try? database.dbQueue.write { db in
+            try agent.update(db)
+        }
     }
 
     func skillsForSource(_ sourceId: Int64) -> [Skill] {

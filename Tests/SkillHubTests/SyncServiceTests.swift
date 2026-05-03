@@ -32,7 +32,7 @@ struct SyncServiceTests {
         try db.dbQueue.write { db in try skill.insert(db) }
         skill = try db.dbQueue.read { db in try Skill.fetchOne(db)! }
 
-        var agent = Agent(id: 0, name: "TestAgent", configPath: nil, detectedAt: Date(), hotReloadSupported: true)
+        var agent = Agent(id: 0, name: "TestAgent", configPath: nil, detectedAt: Date(), hotReloadSupported: true, visible: true, installed: true)
         try db.dbQueue.write { db in try agent.insert(db) }
         agent = try db.dbQueue.read { db in try Agent.fetchOne(db)! }
 
@@ -70,6 +70,37 @@ struct SyncServiceTests {
 
         let linkPath = (agentSkillDir as NSString).appendingPathComponent("my-skill")
         #expect(!FileManager.default.fileExists(atPath: linkPath))
+    }
+
+    @Test func disableSkillRemovesManagedSymlinkEvenWhenTargetIsMissing() throws {
+        let (_, skillId, agentId, agentSkillDir) = try createFixture()
+        try sync.enableSkill(skillId: skillId, agentId: agentId, agentSkillsDir: agentSkillDir)
+
+        let skill = try db.dbQueue.read { db in try Skill.fetchOne(db)! }
+        try FileManager.default.removeItem(atPath: skill.installPath)
+        try sync.disableSkill(skillId: skillId, agentId: agentId, agentSkillsDir: agentSkillDir)
+
+        let linkPath = (agentSkillDir as NSString).appendingPathComponent("my-skill")
+        #expect(!FileManager.default.fileExists(atPath: linkPath))
+        #expect(!FileManager.default.fileExists(atPath: linkPath, isDirectory: nil))
+        #expect((try? FileManager.default.destinationOfSymbolicLink(atPath: linkPath)) == nil)
+    }
+
+    @Test func enableSkillDoesNotReplaceUnmanagedDirectory() throws {
+        let (_, skillId, agentId, agentSkillDir) = try createFixture()
+        let unmanagedPath = (agentSkillDir as NSString).appendingPathComponent("my-skill")
+        try FileManager.default.createDirectory(atPath: unmanagedPath, withIntermediateDirectories: true)
+
+        #expect(throws: (any Error).self) {
+            try sync.enableSkill(skillId: skillId, agentId: agentId, agentSkillsDir: agentSkillDir)
+        }
+
+        let attrs = try FileManager.default.attributesOfItem(atPath: unmanagedPath)
+        #expect(attrs[.type] as? FileAttributeType == .typeDirectory)
+        let state = try db.dbQueue.read { db in
+            try AgentSkill.filter(AgentSkill.Columns.agentId == agentId && AgentSkill.Columns.skillId == skillId).fetchOne(db)
+        }
+        #expect(state == nil)
     }
 
     @Test func batchEnableSource() throws {

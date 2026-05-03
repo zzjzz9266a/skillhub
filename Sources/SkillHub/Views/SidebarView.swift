@@ -6,79 +6,73 @@ struct SidebarView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Sources")
-                .font(.headline)
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 8)
-                .padding(.top, 12)
-                .padding(.bottom, 4)
+            VStack(alignment: .leading, spacing: 18) {
+                Text("SkillHub")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .padding(.leading, 8)
+
+                sourceSection
+            }
+            .padding(.top, 54)
+            .padding(.horizontal, 12)
 
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 2) {
-                    Button(action: { viewModel.selectedSourceId = nil }) {
-                        HStack {
-                            Image(systemName: "tray.full")
-                            Text("All Skills")
-                                .lineLimit(1)
-                            Spacer()
-                        }
-                        .padding(6)
-                        .background(viewModel.selectedSourceId == nil ? Color.accentColor.opacity(0.15) : Color.clear)
-                        .cornerRadius(4)
-                    }
-                    .buttonStyle(.plain)
+                LazyVStack(alignment: .leading, spacing: 3) {
+                    allSkillsRow
 
                     ForEach(viewModel.sources) { source in
-                        Button(action: { viewModel.selectedSourceId = source.id }) {
-                            HStack {
-                                Image(systemName: "shippingbox")
-                                Text(source.label)
-                                    .lineLimit(1)
-                                Spacer()
-                            }
-                            .padding(6)
-                            .background(viewModel.selectedSourceId == source.id ? Color.accentColor.opacity(0.15) : Color.clear)
-                            .cornerRadius(4)
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            Button(role: .destructive) {
-                                deleteConfirmation = source
-                            } label: {
-                                Label("Delete \"\(source.label)\"", systemImage: "trash")
-                            }
-                        }
+                        sourceRow(source)
                     }
                 }
-                .padding(.horizontal, 4)
+                .padding(.horizontal, 12)
+                .padding(.top, 6)
             }
+
+            Spacer(minLength: 12)
 
             Divider()
-                .padding(.vertical, 8)
 
-            Text("Agents")
-                .font(.headline)
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 8)
-                .padding(.bottom, 4)
+            VStack(alignment: .leading, spacing: 8) {
+                sectionHeader("Agents")
 
-            ForEach(viewModel.agents) { agent in
-                HStack {
-                    Circle()
-                        .fill(agentStatusColor(agent))
-                        .frame(width: 8, height: 8)
-                    Text(agent.name)
-                        .lineLimit(1)
-                        .font(.body)
-                    Spacer()
+                ForEach(viewModel.agents) { agent in
+                    Button {
+                        viewModel.toggleAgentVisibility(agent.id)
+                    } label: {
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(agent.installed ? Color.green : Color.secondary.opacity(0.4))
+                                .frame(width: 7, height: 7)
+                            Text(agent.name)
+                                .lineLimit(1)
+                                .font(.system(size: 13))
+                            Spacer()
+                            Image(systemName: agent.visible ? "eye" : "eye.slash")
+                                .font(.system(size: 11))
+                                .foregroundStyle(agent.visible ? Color.accentColor : Color.secondary.opacity(0.5))
+                        }
+                        .foregroundStyle(.primary)
+                        .padding(.horizontal, 10)
+                        .frame(height: 28)
+                        .background(RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.primary.opacity(0.04)))
+                        .contentShape(RoundedRectangle(cornerRadius: 6))
+                    }
+                    .buttonStyle(.plain)
+                    .help(agent.visible ? "Hide from matrix" : "Show in matrix")
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 2)
             }
-
-            Spacer()
+            .padding(.horizontal, 12)
+            .padding(.vertical, 14)
         }
-        .frame(minWidth: 180)
+        .background {
+            VisualEffectView(material: .sidebar, blendingMode: .behindWindow)
+                .ignoresSafeArea()
+        }
+        .overlay(alignment: .trailing) {
+            Divider()
+        }
         .alert("Delete Source", isPresented: Binding(
             get: { deleteConfirmation != nil },
             set: { if !$0 { deleteConfirmation = nil } }
@@ -99,8 +93,68 @@ struct SidebarView: View {
         }
     }
 
-    private func agentStatusColor(_ agent: Agent) -> Color {
-        if agent.hotReloadSupported { return .green }
-        return .yellow
+    private var sourceSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            sectionHeader("Sources")
+        }
     }
-}
+
+    private var allSkillsRow: some View {
+        sidebarButton(
+            title: "All Skills",
+            systemImage: "tray.full",
+            isSelected: viewModel.selectedSourceId == nil
+        ) {
+            viewModel.selectedSourceId = nil
+        }
+    }
+
+    private func sourceRow(_ source: Source) -> some View {
+        sidebarButton(
+            title: source.label,
+            systemImage: "shippingbox",
+            isSelected: viewModel.selectedSourceId == source.id
+        ) {
+            viewModel.selectedSourceId = source.id
+        }
+        .contextMenu {
+            Button(role: .destructive) {
+                deleteConfirmation = source
+            } label: {
+                Label("Delete \"\(source.label)\"", systemImage: "trash")
+            }
+        }
+    }
+
+    private func sidebarButton(title: String, systemImage: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 9) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 15))
+                    .frame(width: 18)
+                Text(title)
+                    .font(.system(size: 13))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(isSelected ? .primary : .secondary)
+            .padding(.horizontal, 10)
+            .frame(height: 30)
+            .background {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isSelected ? Color.accentColor.opacity(0.16) : Color.clear)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title.uppercased())
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundColor(.secondary)
+            .padding(.horizontal, 8)
+    }
+
+    }

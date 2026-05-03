@@ -82,6 +82,32 @@ struct SkillServiceTests {
         #expect(skills.map(\.name) == ["new-skill"])
     }
 
+    @Test func previewGitRepoWithRootSkillUsesRepositoryName() throws {
+        let repoPath = (tempDir as NSString).appendingPathComponent("friendly-skill.git")
+        try FileManager.default.createDirectory(atPath: repoPath, withIntermediateDirectories: true)
+        try "# Friendly Skill".write(
+            toFile: (repoPath as NSString).appendingPathComponent("SKILL.md"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try runGit(["init"], in: repoPath)
+        try runGit(["add", "SKILL.md"], in: repoPath)
+        try runGit([
+            "-c", "user.name=SkillHub Tests",
+            "-c", "user.email=tests@example.invalid",
+            "commit", "-m", "Add skill"
+        ], in: repoPath)
+
+        let resolved = try service.preview(from: repoPath)
+        defer {
+            if let dir = resolved.tempDir {
+                try? FileManager.default.removeItem(atPath: dir)
+            }
+        }
+
+        #expect(resolved.skills.map(\.name) == ["friendly-skill"])
+    }
+
     @Test func getExistingSource() throws {
         let sourcePath = (tempDir as NSString).appendingPathComponent("exist-source")
         try FileManager.default.createDirectory(atPath: sourcePath, withIntermediateDirectories: true)
@@ -107,5 +133,17 @@ struct SkillServiceTests {
         #expect(sources.count == 0)
         let skills = try db.dbQueue.read { db in try Skill.fetchAll(db) }
         #expect(skills.count == 0)
+    }
+
+    private func runGit(_ arguments: [String], in directory: String) throws {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        task.arguments = ["git"] + arguments
+        task.currentDirectoryURL = URL(fileURLWithPath: directory)
+        task.standardOutput = FileHandle.nullDevice
+        task.standardError = FileHandle.nullDevice
+        try task.run()
+        task.waitUntilExit()
+        #expect(task.terminationStatus == 0)
     }
 }

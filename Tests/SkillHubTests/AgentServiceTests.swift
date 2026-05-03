@@ -40,7 +40,9 @@ final class AgentServiceTests: XCTestCase {
 
         let service = AgentService(database: db, homeOverride: tmpHome.path)
         let agents = service.detect()
-        XCTAssertEqual(agents.count, 0, "Empty home should detect 0 agents")
+        XCTAssertEqual(agents.count, AgentService.knownAgents.count, "All known agents should be persisted regardless of presence")
+        let installedCount = agents.filter { $0.installed }.count
+        XCTAssertEqual(installedCount, 0, "No agents should be marked as installed in empty home")
     }
 
     func testAgentPersistence() throws {
@@ -69,10 +71,14 @@ final class AgentServiceTests: XCTestCase {
 
         let service = AgentService(database: db, homeOverride: tmpHome.path)
         _ = service.detect()
-        XCTAssertEqual(try db.dbQueue.read { db in try Agent.fetchCount(db) }, 1)
+        let totalAgents = try db.dbQueue.read { db in try Agent.fetchCount(db) }
+        XCTAssertEqual(totalAgents, AgentService.knownAgents.count)
 
         try FileManager.default.removeItem(atPath: claudeDir.path)
         _ = service.detect()
-        XCTAssertEqual(try db.dbQueue.read { db in try Agent.fetchCount(db) }, 0)
+        let afterRescan = try db.dbQueue.read { db in try Agent.fetchAll(db) }
+        XCTAssertEqual(afterRescan.count, AgentService.knownAgents.count)
+        let installedClaude = afterRescan.first { $0.name == "Claude Code" }
+        XCTAssertEqual(installedClaude?.installed, false, "Claude Code should no longer be installed after config dir removed")
     }
 }

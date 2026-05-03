@@ -4,7 +4,9 @@ import Foundation
 struct AgentDefinition {
     let name: String
     let configPaths: [String]
+    let skillsSubdirectory: String
     let hotReloadSupported: Bool
+    let visibleByDefault: Bool
 }
 
 final class AgentService {
@@ -12,11 +14,13 @@ final class AgentService {
     let homePath: String
 
     static let knownAgents: [AgentDefinition] = [
-        AgentDefinition(name: "Claude Code", configPaths: [".claude"], hotReloadSupported: false),
-        AgentDefinition(name: "OpenCode", configPaths: [".opencode"], hotReloadSupported: false),
-        AgentDefinition(name: "Gemini CLI", configPaths: [".gemini"], hotReloadSupported: false),
-        AgentDefinition(name: "Codex", configPaths: [".codex"], hotReloadSupported: false),
-        AgentDefinition(name: "Copilot CLI", configPaths: [".config/github-copilot"], hotReloadSupported: false),
+        AgentDefinition(name: "Claude Code", configPaths: [".claude"], skillsSubdirectory: "skills", hotReloadSupported: false, visibleByDefault: true),
+        AgentDefinition(name: "Codex", configPaths: [".codex"], skillsSubdirectory: "skills", hotReloadSupported: false, visibleByDefault: true),
+        AgentDefinition(name: "OpenCode", configPaths: [".opencode"], skillsSubdirectory: "skills", hotReloadSupported: false, visibleByDefault: true),
+        AgentDefinition(name: "Gemini CLI", configPaths: [".gemini"], skillsSubdirectory: "skills", hotReloadSupported: false, visibleByDefault: false),
+        AgentDefinition(name: "Copilot CLI", configPaths: [".config/github-copilot"], skillsSubdirectory: "skills", hotReloadSupported: false, visibleByDefault: false),
+        AgentDefinition(name: "OpenClaw", configPaths: [".openclaw"], skillsSubdirectory: "skills", hotReloadSupported: false, visibleByDefault: false),
+        AgentDefinition(name: "Hermes", configPaths: [".hermes"], skillsSubdirectory: "skills", hotReloadSupported: false, visibleByDefault: false),
     ]
 
     init(database: DatabaseService, homeOverride: String? = nil) {
@@ -26,17 +30,18 @@ final class AgentService {
 
     @discardableResult
     func detect() -> [Agent] {
-        let found = Self.knownAgents.compactMap { def -> Agent? in
+        let agentsToUpsert = Self.knownAgents.map { def -> Agent in
             let exists = def.configPaths.contains { configPath in
                 let fullPath = (homePath as NSString).appendingPathComponent(configPath)
                 return FileManager.default.fileExists(atPath: fullPath)
             }
-            guard exists else { return nil }
             return Agent(
                 name: def.name,
                 configPath: def.configPaths.first.map { (homePath as NSString).appendingPathComponent($0) },
                 detectedAt: Date(),
-                hotReloadSupported: def.hotReloadSupported
+                hotReloadSupported: def.hotReloadSupported,
+                visible: def.visibleByDefault,
+                installed: exists
             )
         }
 
@@ -46,16 +51,17 @@ final class AgentService {
             for agent in existing {
                 existingByName[agent.name] = agent
             }
-            let foundNames = Set(found.map(\.name))
 
-            for var agent in found {
+            for var agent in agentsToUpsert {
                 if let match = existingByName[agent.name] {
                     agent.id = match.id
+                    agent.visible = match.visible
                 }
                 try agent.save(db)
             }
 
-            let staleNames = Set(existingByName.keys).subtracting(foundNames)
+            let knownNames = Set(Self.knownAgents.map(\.name))
+            let staleNames = Set(existingByName.keys).subtracting(knownNames)
             for name in staleNames {
                 if let agent = existingByName[name] {
                     try Agent.deleteOne(db, key: agent.id)
