@@ -67,6 +67,11 @@ final class DatabaseService {
                 t.add(column: "installed", .boolean).notNull().defaults(to: true)
             }
         }
+        migrator.registerMigration("v3") { db in
+            try db.alter(table: "agents") { t in
+                t.drop(column: "hotReloadSupported")
+            }
+        }
         try migrator.migrate(dbQueue)
     }
 }

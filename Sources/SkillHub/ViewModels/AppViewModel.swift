@@ -25,8 +25,6 @@ final class AppViewModel: ObservableObject {
     let syncService: SyncService
     let configService: ConfigService
 
-    var lastLocalWrite: Date = .distantPast
-
     init(homeOverride: String? = nil) {
         let homePath = homeOverride ?? FileManager.default.homeDirectoryForCurrentUser.path
         let dbPath = (homePath as NSString).appendingPathComponent(".skillhub/state.db")
@@ -78,7 +76,7 @@ final class AppViewModel: ObservableObject {
 
         try? FileManager.default.createDirectory(atPath: skillsDir, withIntermediateDirectories: true)
 
-        lastLocalWrite = Date()
+        
         do {
             if enabled {
                 try syncService.enableSkill(skillId: skillId, agentId: agentId, agentSkillsDir: skillsDir)
@@ -98,7 +96,7 @@ final class AppViewModel: ObservableObject {
         let skillsDir = agentSkillsDirectory(for: agent)
 
         let sourceSkills = skills.filter { $0.sourceId == sourceId }
-        lastLocalWrite = Date()
+        
         for skill in sourceSkills {
             if enabled {
                 try? syncService.enableSkill(skillId: skill.id, agentId: agentId, agentSkillsDir: skillsDir)
@@ -117,7 +115,7 @@ final class AppViewModel: ObservableObject {
         let skillsDir = agentSkillsDirectory(for: agent)
 
         let groupSkills = skills.filter { $0.sourceId == sourceId && skill($0, belongsTo: groupName) }
-        lastLocalWrite = Date()
+        
         for skill in groupSkills {
             if enabled {
                 try? syncService.enableSkill(skillId: skill.id, agentId: agentId, agentSkillsDir: skillsDir)

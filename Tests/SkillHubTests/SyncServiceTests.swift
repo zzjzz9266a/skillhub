@@ -32,7 +32,7 @@ struct SyncServiceTests {
         try db.dbQueue.write { db in try skill.insert(db) }
         skill = try db.dbQueue.read { db in try Skill.fetchOne(db)! }
 
-        var agent = Agent(id: 0, name: "TestAgent", configPath: nil, detectedAt: Date(), hotReloadSupported: true, visible: true, installed: true)
+        var agent = Agent(id: 0, name: "TestAgent", configPath: nil, detectedAt: Date(), visible: true, installed: true)
         try db.dbQueue.write { db in try agent.insert(db) }
         agent = try db.dbQueue.read { db in try Agent.fetchOne(db)! }
 

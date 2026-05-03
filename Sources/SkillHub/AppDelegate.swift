@@ -1,12 +1,10 @@
 import AppKit
 import SwiftUI
-import Combine
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var menuBarView: MenuBarView?
     let viewModel: AppViewModel
     private var mainWindow: NSWindow?
-    private var fileWatcherStream: FSEventStreamRef?
 
     override init() {
         viewModel = AppViewModel()
@@ -21,7 +19,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         menuBarView?.updateButtonTitle()
         menuBarView?.buildMenu()
 
-        setupFileWatcher()
         showMainWindow()
     }
 
@@ -73,43 +70,5 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             return false
         }
         return true
-    }
-
-    // MARK: - FSEvents
-
-    private func setupFileWatcher() {
-        let hubPath = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".skillhub").path
-
-        var context = FSEventStreamContext(
-            version: 0,
-            info: Unmanaged.passUnretained(self).toOpaque(),
-            retain: nil,
-            release: nil,
-            copyDescription: nil
-        )
-
-        guard let stream = FSEventStreamCreate(
-            kCFAllocatorDefault,
-            { (_, info, _, _, _, _) in
-                guard let info = info else { return }
-                let delegate = Unmanaged<AppDelegate>.fromOpaque(info).takeUnretainedValue()
-                guard Date().timeIntervalSince(delegate.viewModel.lastLocalWrite) >= 2.0 else { return }
-                DispatchQueue.main.async {
-                    delegate.viewModel.refresh()
-                    delegate.menuBarView?.updateButtonTitle()
-                    delegate.menuBarView?.buildMenu()
-                }
-            },
-            &context,
-            [hubPath] as CFArray,
-            FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
-            2.0,
-            FSEventStreamCreateFlags(kFSEventStreamCreateFlagFileEvents)
-        ) else { return }
-
-        fileWatcherStream = stream
-        FSEventStreamSetDispatchQueue(stream, .main)
-        FSEventStreamStart(stream)
     }
 }

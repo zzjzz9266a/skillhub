@@ -34,7 +34,6 @@ struct AppViewModelTests {
             name: "Claude Code",
             configPath: (tempHome as NSString).appendingPathComponent(".claude"),
             detectedAt: Date(),
-            hotReloadSupported: false,
             visible: true,
             installed: true
         )

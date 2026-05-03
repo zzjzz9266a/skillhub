@@ -5,7 +5,6 @@ struct AgentDefinition {
     let name: String
     let configPaths: [String]
     let skillsSubdirectory: String
-    let hotReloadSupported: Bool
     let visibleByDefault: Bool
 }
 
@@ -14,13 +13,13 @@ final class AgentService {
     let homePath: String
 
     static let knownAgents: [AgentDefinition] = [
-        AgentDefinition(name: "Claude Code", configPaths: [".claude"], skillsSubdirectory: "skills", hotReloadSupported: false, visibleByDefault: true),
-        AgentDefinition(name: "Codex", configPaths: [".codex"], skillsSubdirectory: "skills", hotReloadSupported: false, visibleByDefault: true),
-        AgentDefinition(name: "OpenCode", configPaths: [".opencode"], skillsSubdirectory: "skills", hotReloadSupported: false, visibleByDefault: true),
-        AgentDefinition(name: "Gemini CLI", configPaths: [".gemini"], skillsSubdirectory: "skills", hotReloadSupported: false, visibleByDefault: false),
-        AgentDefinition(name: "Copilot CLI", configPaths: [".config/github-copilot"], skillsSubdirectory: "skills", hotReloadSupported: false, visibleByDefault: false),
-        AgentDefinition(name: "OpenClaw", configPaths: [".openclaw"], skillsSubdirectory: "skills", hotReloadSupported: false, visibleByDefault: false),
-        AgentDefinition(name: "Hermes", configPaths: [".hermes"], skillsSubdirectory: "skills", hotReloadSupported: false, visibleByDefault: false),
+        AgentDefinition(name: "Claude Code", configPaths: [".claude"], skillsSubdirectory: "skills", visibleByDefault: true),
+        AgentDefinition(name: "Codex", configPaths: [".codex"], skillsSubdirectory: "skills", visibleByDefault: true),
+        AgentDefinition(name: "OpenCode", configPaths: [".opencode"], skillsSubdirectory: "skills", visibleByDefault: true),
+        AgentDefinition(name: "Gemini CLI", configPaths: [".gemini"], skillsSubdirectory: "skills", visibleByDefault: false),
+        AgentDefinition(name: "Copilot CLI", configPaths: [".config/github-copilot"], skillsSubdirectory: "skills", visibleByDefault: false),
+        AgentDefinition(name: "OpenClaw", configPaths: [".openclaw"], skillsSubdirectory: "skills", visibleByDefault: false),
+        AgentDefinition(name: "Hermes", configPaths: [".hermes"], skillsSubdirectory: "skills", visibleByDefault: false),
     ]
 
     init(database: DatabaseService, homeOverride: String? = nil) {
@@ -39,7 +38,6 @@ final class AgentService {
                 name: def.name,
                 configPath: def.configPaths.first.map { (homePath as NSString).appendingPathComponent($0) },
                 detectedAt: Date(),
-                hotReloadSupported: def.hotReloadSupported,
                 visible: def.visibleByDefault,
                 installed: exists
             )
