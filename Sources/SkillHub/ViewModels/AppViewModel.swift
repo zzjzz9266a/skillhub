@@ -135,13 +135,13 @@ final class AppViewModel: ObservableObject {
         // Get source name for YAML cleanup
         let sourceName = sources.first { $0.id == sourceId }?.name
 
-        // Clean up symlinks for all agents
+        // Clean up copied skill directories for all agents
         for agent in agents {
             let skillsDir = agentSkillsDirectory(for: agent)
             let sourceSkills = skillsForSource(sourceId)
             for skill in sourceSkills {
-                let linkPath = (skillsDir as NSString).appendingPathComponent(skill.name)
-                try? FileManager.default.removeItem(atPath: linkPath)
+                let destPath = (skillsDir as NSString).appendingPathComponent(skill.name)
+                try? FileManager.default.removeItem(atPath: destPath)
             }
         }
 

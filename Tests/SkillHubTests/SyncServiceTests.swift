@@ -42,7 +42,7 @@ struct SyncServiceTests {
         return (source.id, skill.id, agent.id, agentSkillDir)
     }
 
-    @Test func enableSkillCreatesSymlink() throws {
+    @Test func enableSkillCopiesDirectory() throws {
         let (_, skillId, agentId, agentSkillDir) = try createFixture()
         try sync.enableSkill(skillId: skillId, agentId: agentId, agentSkillsDir: agentSkillDir)
 
@@ -52,13 +52,16 @@ struct SyncServiceTests {
         #expect(state != nil)
         #expect(state!.enabled)
 
-        let linkPath = (agentSkillDir as NSString).appendingPathComponent("my-skill")
-        #expect(FileManager.default.fileExists(atPath: linkPath))
-        let attrs = try FileManager.default.attributesOfItem(atPath: linkPath)
-        #expect(attrs[.type] as? FileAttributeType == .typeSymbolicLink)
+        let destPath = (agentSkillDir as NSString).appendingPathComponent("my-skill")
+        var isDir: ObjCBool = false
+        #expect(FileManager.default.fileExists(atPath: destPath, isDirectory: &isDir))
+        #expect(isDir.boolValue)
+
+        let copiedSkillMd = (destPath as NSString).appendingPathComponent("SKILL.md")
+        #expect(FileManager.default.fileExists(atPath: copiedSkillMd))
     }
 
-    @Test func disableSkillRemovesSymlink() throws {
+    @Test func disableSkillRemovesCopiedDirectory() throws {
         let (_, skillId, agentId, agentSkillDir) = try createFixture()
         try sync.enableSkill(skillId: skillId, agentId: agentId, agentSkillsDir: agentSkillDir)
         try sync.disableSkill(skillId: skillId, agentId: agentId, agentSkillsDir: agentSkillDir)
@@ -68,11 +71,11 @@ struct SyncServiceTests {
         }
         if let state = state { #expect(!state.enabled) }
 
-        let linkPath = (agentSkillDir as NSString).appendingPathComponent("my-skill")
-        #expect(!FileManager.default.fileExists(atPath: linkPath))
+        let destPath = (agentSkillDir as NSString).appendingPathComponent("my-skill")
+        #expect(!FileManager.default.fileExists(atPath: destPath))
     }
 
-    @Test func disableSkillRemovesManagedSymlinkEvenWhenTargetIsMissing() throws {
+    @Test func disableSkillRemovesCopiedDirectoryEvenWhenSourceIsMissing() throws {
         let (_, skillId, agentId, agentSkillDir) = try createFixture()
         try sync.enableSkill(skillId: skillId, agentId: agentId, agentSkillsDir: agentSkillDir)
 
@@ -80,10 +83,8 @@ struct SyncServiceTests {
         try FileManager.default.removeItem(atPath: skill.installPath)
         try sync.disableSkill(skillId: skillId, agentId: agentId, agentSkillsDir: agentSkillDir)
 
-        let linkPath = (agentSkillDir as NSString).appendingPathComponent("my-skill")
-        #expect(!FileManager.default.fileExists(atPath: linkPath))
-        #expect(!FileManager.default.fileExists(atPath: linkPath, isDirectory: nil))
-        #expect((try? FileManager.default.destinationOfSymbolicLink(atPath: linkPath)) == nil)
+        let destPath = (agentSkillDir as NSString).appendingPathComponent("my-skill")
+        #expect(!FileManager.default.fileExists(atPath: destPath))
     }
 
     @Test func enableSkillDoesNotReplaceUnmanagedDirectory() throws {
@@ -118,8 +119,9 @@ struct SyncServiceTests {
         }
         #expect(states.count == 2)
         #expect(states.allSatisfy { $0.enabled })
-        #expect(FileManager.default.fileExists(atPath: (agentSkillDir as NSString).appendingPathComponent("my-skill")))
-        #expect(FileManager.default.fileExists(atPath: (agentSkillDir as NSString).appendingPathComponent("skill-2")))
+        var isDir: ObjCBool = false
+        #expect(FileManager.default.fileExists(atPath: (agentSkillDir as NSString).appendingPathComponent("my-skill"), isDirectory: &isDir))
+        #expect(FileManager.default.fileExists(atPath: (agentSkillDir as NSString).appendingPathComponent("skill-2"), isDirectory: &isDir))
     }
 
     @Test func batchEnableUngroupedGroup() throws {

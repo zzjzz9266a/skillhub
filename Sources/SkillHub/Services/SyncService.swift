@@ -17,9 +17,10 @@ final class SyncService {
             throw SyncError.skillNotFound
         }
 
-        let linkPath = (agentSkillsDir as NSString).appendingPathComponent(skill.name)
-        try removeManagedLinkIfPresent(atPath: linkPath, expectedDestination: skill.installPath)
-        try FileManager.default.createSymbolicLink(atPath: linkPath, withDestinationPath: skill.installPath)
+        let destPath = (agentSkillsDir as NSString).appendingPathComponent(skill.name)
+        try removeIfManaged(atPath: destPath)
+        try FileManager.default.createDirectory(atPath: agentSkillsDir, withIntermediateDirectories: true)
+        try FileManager.default.copyItem(atPath: skill.installPath, toPath: destPath)
 
         let agentSkill = AgentSkill(agentId: agentId, skillId: skillId, enabled: true)
         try database.dbQueue.write { db in
@@ -34,8 +35,8 @@ final class SyncService {
             throw SyncError.skillNotFound
         }
 
-        let linkPath = (agentSkillsDir as NSString).appendingPathComponent(skill.name)
-        try removeManagedLinkIfPresent(atPath: linkPath, expectedDestination: skill.installPath)
+        let destPath = (agentSkillsDir as NSString).appendingPathComponent(skill.name)
+        try removeIfManaged(atPath: destPath)
 
         let agentSkill = AgentSkill(agentId: agentId, skillId: skillId, enabled: false)
         try database.dbQueue.write { db in
@@ -104,18 +105,31 @@ final class SyncService {
         return Dictionary(uniqueKeysWithValues: records.map { ($0.skillId, $0.enabled) })
     }
 
-    private func removeManagedLinkIfPresent(atPath path: String, expectedDestination: String) throws {
-        if let destination = try? FileManager.default.destinationOfSymbolicLink(atPath: path) {
-            guard destination == expectedDestination else {
-                throw SyncError.unmanagedPathExists(path: path)
+    private func removeIfManaged(atPath path: String) throws {
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDir) else { return }
+
+        // Symlink: always remove (legacy or managed)
+        if !isDir.boolValue {
+            if let _ = try? FileManager.default.destinationOfSymbolicLink(atPath: path) {
+                try FileManager.default.removeItem(atPath: path)
+                return
             }
+            throw SyncError.unmanagedPathExists(path: path)
+        }
+
+        // Directory: check if it looks like a SkillHub copy (contains SKILL.md or .skillhub-source marker)
+        let markerPath = (path as NSString).appendingPathComponent(".skillhub-source")
+        let skillMdPath = (path as NSString).appendingPathComponent("SKILL.md")
+        let hasMarker = FileManager.default.fileExists(atPath: markerPath)
+        let hasSkillMd = FileManager.default.fileExists(atPath: skillMdPath)
+
+        if hasMarker || hasSkillMd {
             try FileManager.default.removeItem(atPath: path)
             return
         }
 
-        if FileManager.default.fileExists(atPath: path) {
-            throw SyncError.unmanagedPathExists(path: path)
-        }
+        throw SyncError.unmanagedPathExists(path: path)
     }
 }
 
