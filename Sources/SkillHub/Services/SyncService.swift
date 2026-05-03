@@ -4,6 +4,7 @@ import Foundation
 final class SyncService {
     let database: DatabaseService
     let homePath: String
+    static let skillHubMarker = ".skillhub-managed"
 
     init(database: DatabaseService, homeOverride: String? = nil) {
         self.database = database
@@ -21,6 +22,8 @@ final class SyncService {
         try removeIfManaged(atPath: destPath)
         try FileManager.default.createDirectory(atPath: agentSkillsDir, withIntermediateDirectories: true)
         try FileManager.default.copyItem(atPath: skill.installPath, toPath: destPath)
+        let markerPath = (destPath as NSString).appendingPathComponent(SyncService.skillHubMarker)
+        try Data().write(to: URL(fileURLWithPath: markerPath))
 
         let agentSkill = AgentSkill(agentId: agentId, skillId: skillId, enabled: true)
         try database.dbQueue.write { db in
@@ -109,7 +112,7 @@ final class SyncService {
         var isDir: ObjCBool = false
         guard FileManager.default.fileExists(atPath: path, isDirectory: &isDir) else { return }
 
-        // Symlink: always remove (legacy or managed)
+        // Symlink: always remove (legacy from previous versions)
         if !isDir.boolValue {
             if let _ = try? FileManager.default.destinationOfSymbolicLink(atPath: path) {
                 try FileManager.default.removeItem(atPath: path)
@@ -118,14 +121,18 @@ final class SyncService {
             throw SyncError.unmanagedPathExists(path: path)
         }
 
-        // Directory: check if it looks like a SkillHub copy (contains SKILL.md or .skillhub-source marker)
-        let markerPath = (path as NSString).appendingPathComponent(".skillhub-source")
-        let skillMdPath = (path as NSString).appendingPathComponent("SKILL.md")
-        let hasMarker = FileManager.default.fileExists(atPath: markerPath)
-        let hasSkillMd = FileManager.default.fileExists(atPath: skillMdPath)
-
-        if hasMarker || hasSkillMd {
+        // Directory: only remove if it has our marker file
+        let markerPath = (path as NSString).appendingPathComponent(Self.skillHubMarker)
+        if FileManager.default.fileExists(atPath: markerPath) {
             try FileManager.default.removeItem(atPath: path)
+            return
+        }
+
+        // Legacy: no marker but has SKILL.md (from previous symlink-based versions)
+        let skillMdPath = (path as NSString).appendingPathComponent("SKILL.md")
+        if FileManager.default.fileExists(atPath: skillMdPath) {
+            let destPath = path
+            try FileManager.default.removeItem(atPath: destPath)
             return
         }
 
