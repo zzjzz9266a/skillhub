@@ -72,6 +72,11 @@ final class DatabaseService {
                 t.drop(column: "hotReloadSupported")
             }
         }
+        migrator.registerMigration("v4") { db in
+            try db.alter(table: "skills") { t in
+                t.add(column: "description", .text)
+            }
+        }
         try migrator.migrate(dbQueue)
     }
 }

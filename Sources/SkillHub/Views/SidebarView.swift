@@ -37,29 +37,25 @@ struct SidebarView: View {
                 sectionHeader("Agents")
 
                 ForEach(viewModel.agents) { agent in
-                    Button {
-                        viewModel.toggleAgentVisibility(agent.id)
-                    } label: {
-                        HStack(spacing: 8) {
-                            Circle()
-                                .fill(agent.installed ? Color.green : Color.secondary.opacity(0.4))
-                                .frame(width: 7, height: 7)
-                            Text(agent.name)
-                                .lineLimit(1)
-                                .font(.system(size: 13))
-                            Spacer()
-                            Image(systemName: agent.visible ? "eye" : "eye.slash")
-                                .font(.system(size: 11))
-                                .foregroundStyle(agent.visible ? Color.accentColor : Color.secondary.opacity(0.5))
-                        }
-                        .foregroundStyle(.primary)
-                        .padding(.horizontal, 10)
-                        .frame(height: 28)
-                        .background(RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.primary.opacity(0.04)))
-                        .contentShape(RoundedRectangle(cornerRadius: 6))
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(agent.installed ? Color.green : Color.secondary.opacity(0.4))
+                            .frame(width: 7, height: 7)
+                        Text(agent.name)
+                            .lineLimit(1)
+                            .font(.system(size: 13))
+                        Spacer()
+                        Toggle(isOn: Binding(
+                            get: { agent.visible },
+                            set: { _ in viewModel.toggleAgentVisibility(agent.id) }
+                        )) {}
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+                            .controlSize(.mini)
                     }
-                    .buttonStyle(.plain)
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 10)
+                    .frame(height: 28)
                     .help(agent.visible ? "Hide from matrix" : "Show in matrix")
                 }
             }
@@ -118,6 +114,14 @@ struct SidebarView: View {
             viewModel.selectedSourceId = source.id
         }
         .contextMenu {
+            if SourceParser.parse(source.origin) != nil {
+                Button {
+                    viewModel.updateSource(source.id)
+                } label: {
+                    Label("Update", systemImage: "arrow.clockwise")
+                }
+                Divider()
+            }
             Button(role: .destructive) {
                 deleteConfirmation = source
             } label: {

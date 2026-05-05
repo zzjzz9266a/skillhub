@@ -40,6 +40,7 @@ final class AppViewModel: ObservableObject {
 
     func refresh() {
         refreshSources()
+        try? skillService.refreshDescriptions()
         refreshSkills()
         let found = agentService.detect()
         self.agents = found
@@ -126,6 +127,37 @@ final class AppViewModel: ObservableObject {
 
         for skill in groupSkills {
             agentSkillStates[agentId, default: [:]][skill.id] = enabled
+        }
+    }
+
+    // MARK: - Update
+
+    @Published var updatingSourceIds: Set<Int64> = []
+
+    func isSourceUpdating(_ sourceId: Int64) -> Bool {
+        updatingSourceIds.contains(sourceId)
+    }
+
+    func updateSource(_ sourceId: Int64) {
+        guard !updatingSourceIds.contains(sourceId) else { return }
+        updatingSourceIds.insert(sourceId)
+        statusText = "Updating..."
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            do {
+                _ = try self.skillService.updateSource(sourceId)
+                DispatchQueue.main.async {
+                    self.updatingSourceIds.remove(sourceId)
+                    self.refresh()
+                    self.statusText = "Update complete"
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.updatingSourceIds.remove(sourceId)
+                    self.statusText = "Update failed: \(error.localizedDescription)"
+                }
+            }
         }
     }
 

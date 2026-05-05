@@ -15,7 +15,7 @@ final class AgentService {
     static let knownAgents: [AgentDefinition] = [
         AgentDefinition(name: "Claude Code", configPaths: [".claude"], skillsSubdirectory: "skills", visibleByDefault: true),
         AgentDefinition(name: "Codex", configPaths: [".codex"], skillsSubdirectory: "skills", visibleByDefault: true),
-        AgentDefinition(name: "OpenCode", configPaths: [".opencode"], skillsSubdirectory: "skills", visibleByDefault: true),
+        AgentDefinition(name: "OpenCode", configPaths: [".config/opencode"], skillsSubdirectory: "skills", visibleByDefault: true),
         AgentDefinition(name: "Gemini CLI", configPaths: [".gemini"], skillsSubdirectory: "skills", visibleByDefault: false),
         AgentDefinition(name: "Copilot CLI", configPaths: [".config/github-copilot"], skillsSubdirectory: "skills", visibleByDefault: false),
         AgentDefinition(name: "OpenClaw", configPaths: [".openclaw"], skillsSubdirectory: "skills", visibleByDefault: false),

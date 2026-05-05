@@ -73,6 +73,7 @@ final class SkillService {
                     name: skill.name,
                     sourceId: source.id,
                     installPath: destPath,
+                    description: skill.description,
                     groups: skill.groups,
                     version: nil,
                     installedAt: Date(),
@@ -116,6 +117,7 @@ final class SkillService {
                     name: skill.name,
                     sourceId: source.id,
                     installPath: destPath,
+                    description: skill.description,
                     groups: skill.groups,
                     version: nil,
                     installedAt: Date(),
@@ -186,11 +188,131 @@ final class SkillService {
         }
     }
 
+    func refreshDescriptions() throws {
+        let skills = try database.dbQueue.read { db in
+            try Skill.filter(Skill.Columns.description == nil).fetchAll(db)
+        }
+        for var skill in skills {
+            let meta = parseMetadata(from: skill.installPath)
+            guard meta.description != nil else { continue }
+            skill.description = meta.description
+            try database.dbQueue.write { db in
+                try skill.update(db)
+            }
+        }
+    }
+
+    func updateSource(_ sourceId: Int64, homeOverride: String? = nil) throws -> Source {
+        let source = try database.dbQueue.read { db in
+            try Source.fetchOne(db, key: sourceId)
+        }
+        guard let source = source else {
+            throw SkillServiceError.invalidSource("source not found")
+        }
+        guard SourceParser.parse(source.origin) != nil else {
+            throw SkillServiceError.invalidSource("cannot determine source type for update")
+        }
+
+        let normalized = source.origin
+        let sourceType = SourceParser.parse(normalized)
+
+        let scanPath: String
+        var tempDir: String?
+        let rootSkillName: String?
+
+        switch sourceType {
+        case .git(let url):
+            let cloneDir = FileManager.default.temporaryDirectory
+                .appendingPathComponent("skillhub-update-\(UUID().uuidString)").path
+            try cloneGit(url: url, to: cloneDir)
+            tempDir = cloneDir
+            scanPath = cloneDir
+            rootSkillName = source.name
+        case .local(let path):
+            scanPath = path
+            rootSkillName = nil
+        case .npm:
+            throw SkillServiceError.unsupportedSource("npm packages are not yet supported")
+        case nil:
+            throw SkillServiceError.invalidSource("unable to determine source type for: \(normalized)")
+        }
+
+        defer {
+            if let dir = tempDir { try? FileManager.default.removeItem(atPath: dir) }
+        }
+
+        let discoveredSkills = findInternalSkills(at: scanPath, rootSkillName: rootSkillName)
+
+        let targetDir = (skillsStorePath as NSString)
+            .appendingPathComponent(source.name)
+        try? FileManager.default.removeItem(atPath: targetDir)
+        try FileManager.default.createDirectory(atPath: targetDir, withIntermediateDirectories: true)
+
+        var updatedSource = source
+        updatedSource.installedAt = Date()
+        try database.dbQueue.write { db in
+            try updatedSource.update(db)
+            try Skill.filter(Skill.Columns.sourceId == source.id).deleteAll(db)
+
+            for skill in discoveredSkills {
+                let destPath = (targetDir as NSString).appendingPathComponent(skill.name)
+                var record = Skill(
+                    name: skill.name,
+                    sourceId: source.id,
+                    installPath: destPath,
+                    description: skill.description,
+                    groups: skill.groups,
+                    version: nil,
+                    installedAt: Date(),
+                    updatedAt: Date()
+                )
+                try record.insert(db)
+            }
+        }
+
+        for skill in discoveredSkills {
+            let destPath = (targetDir as NSString).appendingPathComponent(skill.name)
+            try FileManager.default.copyItem(atPath: skill.path, toPath: destPath)
+        }
+
+        let homePath = homeOverride ?? FileManager.default.homeDirectoryForCurrentUser.path
+        let syncService = SyncService(database: database, homeOverride: homeOverride)
+        let agents = try database.dbQueue.read { db in
+            try Agent.fetchAll(db)
+        }
+        for agent in agents where agent.visible {
+            let existingStates = (try? syncService.getAgentSkillStates(agentId: agent.id)) ?? [:]
+            let hadSourceSkills = existingStates.values.contains { $0 }
+            guard hadSourceSkills else { continue }
+
+            let configPath = agent.configPath
+            let skillsDir: String
+            if let cp = configPath {
+                skillsDir = (cp as NSString).appendingPathComponent("skills")
+            } else {
+                let def = AgentService.knownAgents.first { $0.name == agent.name }
+                let relative = def?.configPaths.first ?? ".claude"
+                skillsDir = ((homePath as NSString).appendingPathComponent(relative) as NSString).appendingPathComponent("skills")
+            }
+            try? FileManager.default.createDirectory(atPath: skillsDir, withIntermediateDirectories: true)
+
+            let updatedSkills = try database.dbQueue.read { db in
+                try Skill.filter(Skill.Columns.sourceId == source.id).fetchAll(db)
+            }
+            for skill in updatedSkills {
+                try? syncService.enableSkill(skillId: skill.id, agentId: agent.id, agentSkillsDir: skillsDir)
+            }
+        }
+
+        return updatedSource
+    }
+
     // MARK: - Preview
 
     struct DiscoveredSkill {
         let name: String
         let groups: [String]
+        let description: String?
         let path: String
     }
 
@@ -236,10 +358,11 @@ final class SkillService {
         let name: String
         let path: String
         let groups: [String]
+        let description: String?
     }
 
     private func findSkills(at path: String, rootSkillName: String? = nil) -> [DiscoveredSkill] {
-        return findInternalSkills(at: path, rootSkillName: rootSkillName).map { DiscoveredSkill(name: $0.name, groups: $0.groups, path: $0.path) }
+        return findInternalSkills(at: path, rootSkillName: rootSkillName).map { DiscoveredSkill(name: $0.name, groups: $0.groups, description: $0.description, path: $0.path) }
     }
 
     private func findInternalSkills(at path: String, depth: Int = 0, rootSkillName: String? = nil) -> [InternalSkill] {
@@ -247,8 +370,8 @@ final class SkillService {
         guard let entries = try? FileManager.default.contentsOfDirectory(atPath: path) else {
             if hasSkillMD(at: path) {
                 let name = rootSkillName ?? (path as NSString).lastPathComponent
-                let groups = parseGroups(from: path)
-                result.append(InternalSkill(name: name, path: path, groups: groups))
+                let meta = parseMetadata(from: path)
+                result.append(InternalSkill(name: name, path: path, groups: meta.groups, description: meta.description))
             }
             return result
         }
@@ -260,8 +383,8 @@ final class SkillService {
             guard FileManager.default.fileExists(atPath: fullPath, isDirectory: &isDir),
                   isDir.boolValue else { continue }
             if hasSkillMD(at: fullPath) {
-                let groups = parseGroups(from: fullPath)
-                result.append(InternalSkill(name: entry, path: fullPath, groups: groups))
+                let meta = parseMetadata(from: fullPath)
+                result.append(InternalSkill(name: entry, path: fullPath, groups: meta.groups, description: meta.description))
             } else if depth < 2 {
                 result.append(contentsOf: findInternalSkills(at: fullPath, depth: depth + 1))
             }
@@ -269,8 +392,8 @@ final class SkillService {
         // If no subdirectories were found as skills, check if this path itself is a skill
         if result.isEmpty && hasSkillMD(at: path) {
             let name = rootSkillName ?? (path as NSString).lastPathComponent
-            let groups = parseGroups(from: path)
-            result.append(InternalSkill(name: name, path: path, groups: groups))
+            let meta = parseMetadata(from: path)
+            result.append(InternalSkill(name: name, path: path, groups: meta.groups, description: meta.description))
         }
         return result
     }
@@ -301,28 +424,30 @@ final class SkillService {
         return false
     }
 
-    private func parseGroups(from path: String) -> [String] {
+    private func parseMetadata(from path: String) -> (groups: [String], description: String?) {
         let skillMDPath = (path as NSString).appendingPathComponent("SKILL.md")
-        guard let content = try? String(contentsOfFile: skillMDPath, encoding: .utf8) else {
-            return []
+        guard let content = try? String(contentsOfFile: skillMDPath, encoding: .utf8),
+              content.hasPrefix("---") else {
+            return ([], nil)
         }
-        if content.hasPrefix("---") {
-            let parts = content.components(separatedBy: "---")
-            if parts.count >= 3 {
-                let frontmatter = parts[1]
-                for line in frontmatter.components(separatedBy: "\n") {
-                    let trimmed = line.trimmingCharacters(in: .whitespaces)
-                    if trimmed.hasPrefix("groups:") || trimmed.hasPrefix("group:") {
-                        let values = trimmed.split(separator: ":").last?.trimmingCharacters(in: .whitespaces) ?? ""
-                        let items = values.components(separatedBy: ",")
-                            .map { $0.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "[]\"'")) }
-                            .filter { !$0.isEmpty }
-                        return items
-                    }
-                }
+        let parts = content.components(separatedBy: "---")
+        guard parts.count >= 3 else { return ([], nil) }
+        let frontmatter = parts[1]
+        var groups: [String] = []
+        var description: String? = nil
+        for line in frontmatter.components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("groups:") || trimmed.hasPrefix("group:") {
+                let values = trimmed.split(separator: ":").last?.trimmingCharacters(in: .whitespaces) ?? ""
+                groups = values.components(separatedBy: ",")
+                    .map { $0.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "[]\"'")) }
+                    .filter { !$0.isEmpty }
+            } else if trimmed.hasPrefix("description:") {
+                description = trimmed.split(separator: ":", maxSplits: 1).last?.trimmingCharacters(in: .whitespaces)
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
             }
         }
-        return []
+        return (groups, description)
     }
 }
 
