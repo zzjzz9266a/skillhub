@@ -3,9 +3,11 @@ import AppKit
 final class MenuBarView: NSObject {
     private var statusItem: NSStatusItem!
     private weak var viewModel: AppViewModel?
+    private weak var appDelegate: AppDelegate?
 
-    init(viewModel: AppViewModel) {
+    init(viewModel: AppViewModel, appDelegate: AppDelegate) {
         self.viewModel = viewModel
+        self.appDelegate = appDelegate
         super.init()
         setupStatusItem()
     }
@@ -134,7 +136,7 @@ final class MenuBarView: NSObject {
     // MARK: - Actions
 
     @objc private func openMainWindow() {
-        (NSApp.delegate as? AppDelegate)?.showMainWindow()
+        appDelegate?.showMainWindow()
     }
 
     @objc private func refresh() {

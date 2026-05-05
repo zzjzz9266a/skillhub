@@ -14,7 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
 
-        menuBarView = MenuBarView(viewModel: viewModel)
+        menuBarView = MenuBarView(viewModel: viewModel, appDelegate: self)
         viewModel.refresh()
         menuBarView?.updateButtonTitle()
         menuBarView?.buildMenu()
@@ -31,7 +31,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if mainWindow == nil {
             createMainWindow()
         }
-        guard let window = mainWindow else { return }
+        guard let window = mainWindow else {
+            print("[SkillHub] showMainWindow — window is nil after createMainWindow")
+            return
+        }
 
         if window.isMiniaturized {
             window.deminiaturize(nil)
