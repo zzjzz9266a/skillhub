@@ -6,6 +6,8 @@ struct SkillMatrixView: View {
     @AppStorage("skillColumnWidth") private var storedWidth: Double = 200
     @GestureState private var dragOffset: CGFloat = 0
     @State private var popoverSkillId: Int64? = nil
+    @State private var hoveredSourceId: Int64? = nil
+    @State private var hoveredSkillId: Int64? = nil
 
     private var skillColumnWidth: CGFloat { CGFloat(storedWidth) }
 
@@ -245,7 +247,7 @@ struct SkillMatrixView: View {
                 Image(systemName: "shippingbox").font(.system(size: 13)).foregroundStyle(.secondary)
                 Text(source.label).font(.system(size: 13, weight: .semibold)).lineLimit(1).truncationMode(.tail)
 
-                if isGitSource && !isUpdating {
+                if isGitSource && !isUpdating && hoveredSourceId == source.id {
                     Button {
                         viewModel.updateSource(source.id)
                     } label: {
@@ -267,6 +269,9 @@ struct SkillMatrixView: View {
             .frame(width: skillColumnWidth + dragOffset, alignment: .leading)
             .contentShape(Rectangle())
             .onTapGesture { viewModel.toggleSourceExpanded(sourceId: source.id) }
+            .onHover { hovering in
+                hoveredSourceId = hovering ? source.id : nil
+            }
             .frame(height: 34)
             .background(Color(nsColor: .controlBackgroundColor).opacity(0.35))
 
@@ -321,9 +326,11 @@ struct SkillMatrixView: View {
         let isPopoverShown = popoverSkillId == skill.id
 
         return HStack(spacing: 4) {
+            Color.clear.frame(width: 16, height: 16)
+            Color.clear.frame(width: 13, height: 13)
             Text(displayName(for: skill, sourceLabel: sourceLabel))
                 .font(.system(size: 13)).lineLimit(1).truncationMode(.tail)
-            if hasDesc {
+            if hasDesc && hoveredSkillId == skill.id {
                 Button {
                     popoverSkillId = popoverSkillId == skill.id ? nil : skill.id
                 } label: {
@@ -341,8 +348,11 @@ struct SkillMatrixView: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.leading, 28).padding(.trailing, 6)
+        .padding(.horizontal, 12)
         .frame(width: skillColumnWidth + dragOffset, alignment: .leading)
+        .onHover { hovering in
+            hoveredSkillId = hovering ? skill.id : nil
+        }
         .frame(height: 34)
     }
 
