@@ -3,13 +3,12 @@ import AppKit
 
 struct SkillMatrixView: View {
     @ObservedObject var viewModel: AppViewModel
-    @AppStorage("skillColumnWidth") private var storedWidth: Double = 200
-    @GestureState private var dragOffset: CGFloat = 0
     @State private var popoverSkillId: Int64? = nil
     @State private var hoveredSourceId: Int64? = nil
     @State private var hoveredSkillId: Int64? = nil
+    @State private var skillColumnWidth: CGFloat = 200
 
-    private var skillColumnWidth: CGFloat { CGFloat(storedWidth) }
+    private let agentColumnWidth: CGFloat = 68
 
     var body: some View {
         if viewModel.visibleAgents.isEmpty {
@@ -53,50 +52,79 @@ struct SkillMatrixView: View {
             }
             .padding(.top, 18).padding(.horizontal, 24).padding(.bottom, 12)
 
-            ScrollView(.vertical, showsIndicators: true) {
-                ZStack(alignment: .topLeading) {
-                    fullWidthMatrix(tree: tree)
-                    Rectangle()
-                        .fill(Color(nsColor: .windowBackgroundColor))
-                        .frame(width: skillColumnWidth + dragOffset)
-                        .frame(maxHeight: .infinity, alignment: .top)
-                    frozenSkillColumn(tree: tree)
+            GeometryReader { geo in
+                let treeWidth = computeSkillColumnWidth(tree: tree)
+                let totalContentWidth = treeWidth + CGFloat(viewModel.visibleAgents.count) * agentColumnWidth
+                let needsHScroll = totalContentWidth > geo.size.width
+
+                ScrollView(.vertical, showsIndicators: true) {
+                    ZStack(alignment: .topLeading) {
+                        if needsHScroll {
+                            ScrollView(.horizontal, showsIndicators: true) {
+                                fullWidthContent(tree: tree, width: treeWidth)
+                            }
+                        } else {
+                            fullWidthContent(tree: tree, width: treeWidth)
+                        }
+                        Rectangle()
+                            .fill(Color(nsColor: .windowBackgroundColor))
+                            .frame(width: treeWidth)
+                            .frame(maxHeight: .infinity, alignment: .top)
+                        frozenSkillColumn(tree: tree, width: treeWidth)
+                    }
                 }
-                .coordinateSpace(name: "matrixColumns")
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay {
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 0.5)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 0.5)
+                }
             }
             .padding(.horizontal, 24).padding(.bottom, 18)
         }
     }
 
-    // MARK: - Full-width matrix (scrollable horizontally)
+    // MARK: - Skill column width calculation
 
-    private func fullWidthMatrix(tree: [(source: Source, groups: [(name: String, skills: [Skill])])]) -> some View {
-        ScrollView(.horizontal, showsIndicators: true) {
-            VStack(spacing: 0) {
-                fullWidthHeader
-                Divider()
-                fullWidthRows(tree: tree)
+    private func computeSkillColumnWidth(tree: [(source: Source, groups: [(name: String, skills: [Skill])])]) -> CGFloat {
+        var maxWidth: CGFloat = 0
+        let font = NSFont.systemFont(ofSize: 13)
+        let boldFont = NSFont.systemFont(ofSize: 13, weight: .semibold)
+        for item in tree {
+            let sourceW = ceil((item.source.label as NSString).size(withAttributes: [.font: boldFont]).width)
+            maxWidth = max(maxWidth, sourceW)
+            for group in item.groups {
+                let groupW = ceil((displayName(for: group.name) as NSString).size(withAttributes: [.font: font]).width)
+                maxWidth = max(maxWidth, groupW)
+                for skill in group.skills {
+                    let skillName = displayName(for: skill, sourceLabel: item.source.label)
+                    let skillW = ceil((skillName as NSString).size(withAttributes: [.font: font]).width)
+                    maxWidth = max(maxWidth, skillW)
+                }
             }
+        }
+        return max(maxWidth + 49 + 24, 120)
+    }
+
+    // MARK: - Full-width matrix content
+
+    private func fullWidthContent(tree: [(source: Source, groups: [(name: String, skills: [Skill])])], width: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            fullWidthHeader(width: width)
+            Divider()
+            fullWidthRows(tree: tree, width: width)
         }
     }
 
-    private var fullWidthHeader: some View {
+    private func fullWidthHeader(width: CGFloat) -> some View {
         HStack(spacing: 0) {
             Color.clear
-                .frame(width: skillColumnWidth + dragOffset, alignment: .leading)
-            HStack(spacing: 0) {
-                ForEach(viewModel.visibleAgents) { agent in
-                    Text(agent.name)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2).multilineTextAlignment(.center)
-                        .frame(width: 104, alignment: .center)
-                }
+                .frame(width: width, alignment: .leading)
+            ForEach(viewModel.visibleAgents) { agent in
+                Text(agent.name)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2).multilineTextAlignment(.center)
+                    .frame(width: agentColumnWidth, alignment: .center)
             }
         }
         .frame(height: 34)
@@ -104,45 +132,43 @@ struct SkillMatrixView: View {
     }
 
     @ViewBuilder
-    private func fullWidthRows(tree: [(source: Source, groups: [(name: String, skills: [Skill])])]) -> some View {
+    private func fullWidthRows(tree: [(source: Source, groups: [(name: String, skills: [Skill])])], width: CGFloat) -> some View {
         ForEach(tree, id: \.source.id) { item in
-            fullWidthForSource(source: item.source, groups: item.groups)
+            fullWidthForSource(source: item.source, groups: item.groups, width: width)
             Divider()
         }
     }
 
     @ViewBuilder
-    private func fullWidthForSource(source: Source, groups: [(name: String, skills: [Skill])]) -> some View {
+    private func fullWidthForSource(source: Source, groups: [(name: String, skills: [Skill])], width: CGFloat) -> some View {
         let isExpanded = viewModel.isSourceExpanded(sourceId: source.id)
 
         VStack(alignment: .leading, spacing: 0) {
-            fullWidthSourceHeader(source: source)
+            fullWidthSourceHeader(source: source, width: width)
             if isExpanded {
                 if groups.count == 1 && groups.first?.name == "ungrouped" {
                     ForEach(groups.first!.skills) { skill in
-                        fullWidthSkillRow(skill: skill)
+                        fullWidthSkillRow(skill: skill, width: width)
                     }
                 } else {
                     ForEach(groups, id: \.name) { group in
-                        fullWidthForGroup(source: source, groupName: group.name, skills: group.skills)
+                        fullWidthForGroup(source: source, groupName: group.name, skills: group.skills, width: width)
                     }
                 }
             }
         }
     }
 
-    private func fullWidthSourceHeader(source: Source) -> some View {
+    private func fullWidthSourceHeader(source: Source, width: CGFloat) -> some View {
         HStack(spacing: 0) {
             Color.clear
-                .frame(width: skillColumnWidth + dragOffset, alignment: .leading)
-            HStack(spacing: 0) {
-                ForEach(viewModel.visibleAgents) { agent in
-                    let state = viewModel.sourceToggleState(sourceId: source.id, agentId: agent.id)
-                    TriStateToggle(state: state) { enable in
-                        viewModel.toggleSource(sourceId: source.id, agentId: agent.id, enabled: enable)
-                    }
-                    .frame(width: 104)
+                .frame(width: width, alignment: .leading)
+            ForEach(viewModel.visibleAgents) { agent in
+                let state = viewModel.sourceToggleState(sourceId: source.id, agentId: agent.id)
+                TriStateToggle(state: state) { enable in
+                    viewModel.toggleSource(sourceId: source.id, agentId: agent.id, enabled: enable)
                 }
+                .frame(width: agentColumnWidth)
             }
         }
         .frame(height: 34)
@@ -150,21 +176,19 @@ struct SkillMatrixView: View {
     }
 
     @ViewBuilder
-    private func fullWidthForGroup(source: Source, groupName: String, skills: [Skill]) -> some View {
+    private func fullWidthForGroup(source: Source, groupName: String, skills: [Skill], width: CGFloat) -> some View {
         let isExpanded = viewModel.isGroupExpanded(sourceId: source.id, groupName: groupName)
 
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 0) {
                 Color.clear
-                    .frame(width: skillColumnWidth + dragOffset, alignment: .leading)
-                HStack(spacing: 0) {
-                    ForEach(viewModel.visibleAgents) { agent in
-                        let state = viewModel.groupToggleState(sourceId: source.id, groupName: groupName, agentId: agent.id)
-                        TriStateToggle(state: state) { enable in
-                            viewModel.toggleGroup(sourceId: source.id, groupName: groupName, agentId: agent.id, enabled: enable)
-                        }
-                        .frame(width: 104)
+                    .frame(width: width, alignment: .leading)
+                ForEach(viewModel.visibleAgents) { agent in
+                    let state = viewModel.groupToggleState(sourceId: source.id, groupName: groupName, agentId: agent.id)
+                    TriStateToggle(state: state) { enable in
+                        viewModel.toggleGroup(sourceId: source.id, groupName: groupName, agentId: agent.id, enabled: enable)
                     }
+                    .frame(width: agentColumnWidth)
                 }
             }
             .frame(height: 32)
@@ -172,24 +196,22 @@ struct SkillMatrixView: View {
 
             if isExpanded {
                 ForEach(skills) { skill in
-                    fullWidthSkillRow(skill: skill)
+                    fullWidthSkillRow(skill: skill, width: width)
                 }
             }
         }
     }
 
-    private func fullWidthSkillRow(skill: Skill) -> some View {
+    private func fullWidthSkillRow(skill: Skill, width: CGFloat) -> some View {
         HStack(spacing: 0) {
             Color.clear
-                .frame(width: skillColumnWidth + dragOffset, alignment: .leading)
-            HStack(spacing: 0) {
-                ForEach(viewModel.visibleAgents) { agent in
-                    let enabled = viewModel.agentSkillStates[agent.id]?[skill.id] ?? false
-                    SkillCellToggle(enabled: enabled) {
-                        viewModel.toggleSkill(skillId: skill.id, agentId: agent.id, enabled: !enabled)
-                    }
-                    .frame(width: 104)
+                .frame(width: width, alignment: .leading)
+            ForEach(viewModel.visibleAgents) { agent in
+                let enabled = viewModel.agentSkillStates[agent.id]?[skill.id] ?? false
+                SkillCellToggle(enabled: enabled) {
+                    viewModel.toggleSkill(skillId: skill.id, agentId: agent.id, enabled: !enabled)
                 }
+                .frame(width: agentColumnWidth)
             }
         }
         .frame(height: 34)
@@ -197,39 +219,36 @@ struct SkillMatrixView: View {
 
     // MARK: - Frozen skill column (overlay)
 
-    private func frozenSkillColumn(tree: [(source: Source, groups: [(name: String, skills: [Skill])])]) -> some View {
+    private func frozenSkillColumn(tree: [(source: Source, groups: [(name: String, skills: [Skill])])], width: CGFloat) -> some View {
         VStack(spacing: 0) {
-            frozenHeader
+            frozenHeader(width: width)
             Divider()
-            frozenSkillRows(tree: tree)
+            frozenSkillRows(tree: tree, width: width)
         }
-        .frame(width: skillColumnWidth + dragOffset)
+        .frame(width: width)
         .background(Color(nsColor: .windowBackgroundColor))
-        .overlay(alignment: .trailing) {
-            dividerView
-        }
     }
 
-    private var frozenHeader: some View {
+    private func frozenHeader(width: CGFloat) -> some View {
         Text("Skill")
             .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(.secondary)
-            .frame(width: skillColumnWidth + dragOffset, alignment: .leading)
+            .frame(width: width, alignment: .leading)
             .padding(.horizontal, 12)
             .frame(height: 34)
             .background(Color(nsColor: .controlBackgroundColor).opacity(0.55))
     }
 
     @ViewBuilder
-    private func frozenSkillRows(tree: [(source: Source, groups: [(name: String, skills: [Skill])])]) -> some View {
+    private func frozenSkillRows(tree: [(source: Source, groups: [(name: String, skills: [Skill])])], width: CGFloat) -> some View {
         ForEach(tree, id: \.source.id) { item in
-            frozenSourceRow(source: item.source, groups: item.groups)
+            frozenSourceRow(source: item.source, groups: item.groups, width: width)
             Divider()
         }
     }
 
     @ViewBuilder
-    private func frozenSourceRow(source: Source, groups: [(name: String, skills: [Skill])]) -> some View {
+    private func frozenSourceRow(source: Source, groups: [(name: String, skills: [Skill])], width: CGFloat) -> some View {
         let isExpanded = viewModel.isSourceExpanded(sourceId: source.id)
         let isGitSource = SourceParser.parse(source.origin) != nil
         let isUpdating = viewModel.isSourceUpdating(source.id)
@@ -266,7 +285,7 @@ struct SkillMatrixView: View {
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 12)
-            .frame(width: skillColumnWidth + dragOffset, alignment: .leading)
+            .frame(width: width, alignment: .leading)
             .contentShape(Rectangle())
             .onTapGesture { viewModel.toggleSourceExpanded(sourceId: source.id) }
             .onHover { hovering in
@@ -278,11 +297,11 @@ struct SkillMatrixView: View {
             if isExpanded {
                 if groups.count == 1 && groups.first?.name == "ungrouped" {
                     ForEach(groups.first!.skills) { skill in
-                        frozenSkillName(skill: skill, sourceLabel: source.label)
+                        frozenSkillName(skill: skill, sourceLabel: source.label, width: width)
                     }
                 } else {
                     ForEach(groups, id: \.name) { group in
-                        frozenGroupRow(source: source, groupName: group.name, skills: group.skills)
+                        frozenGroupRow(source: source, groupName: group.name, skills: group.skills, width: width)
                     }
                 }
             }
@@ -290,7 +309,7 @@ struct SkillMatrixView: View {
     }
 
     @ViewBuilder
-    private func frozenGroupRow(source: Source, groupName: String, skills: [Skill]) -> some View {
+    private func frozenGroupRow(source: Source, groupName: String, skills: [Skill], width: CGFloat) -> some View {
         let isExpanded = viewModel.isGroupExpanded(sourceId: source.id, groupName: groupName)
 
         VStack(alignment: .leading, spacing: 0) {
@@ -306,7 +325,7 @@ struct SkillMatrixView: View {
                     Spacer(minLength: 0)
                 }
                 .padding(.horizontal, 12)
-                .frame(width: skillColumnWidth + dragOffset, alignment: .leading)
+                .frame(width: width, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -315,13 +334,13 @@ struct SkillMatrixView: View {
 
             if isExpanded {
                 ForEach(skills) { skill in
-                    frozenSkillName(skill: skill, sourceLabel: source.label)
+                    frozenSkillName(skill: skill, sourceLabel: source.label, width: width)
                 }
             }
         }
     }
 
-    private func frozenSkillName(skill: Skill, sourceLabel: String) -> some View {
+    private func frozenSkillName(skill: Skill, sourceLabel: String, width: CGFloat) -> some View {
         let hasDesc = skill.description != nil
         let isPopoverShown = popoverSkillId == skill.id
 
@@ -349,7 +368,7 @@ struct SkillMatrixView: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 12)
-        .frame(width: skillColumnWidth + dragOffset, alignment: .leading)
+        .frame(width: width, alignment: .leading)
         .onHover { hovering in
             hoveredSkillId = hovering ? skill.id : nil
         }
@@ -366,36 +385,10 @@ struct SkillMatrixView: View {
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: 280, alignment: .leading)
             }
         }
+        .frame(minWidth: 200, idealWidth: 320, maxWidth: 450, alignment: .leading)
         .padding(12)
-    }
-
-    // MARK: - Divider
-
-    private var dividerView: some View {
-        Rectangle()
-            .fill(dragOffset != 0 ? Color.accentColor.opacity(0.5) : Color(nsColor: .separatorColor).opacity(0.2))
-            .frame(width: 4)
-            .onHover { hovering in
-                if hovering {
-                    NSCursor.resizeLeftRight.push()
-                } else {
-                    NSCursor.arrow.push()
-                }
-            }
-            .gesture(
-                DragGesture(minimumDistance: 2, coordinateSpace: .named("matrixColumns"))
-                    .updating($dragOffset) { value, state, _ in
-                        state = value.translation.width
-                    }
-                    .onEnded { value in
-                        let newWidth = max(120, min(500, storedWidth + Double(value.translation.width)))
-                        storedWidth = newWidth
-                        NSCursor.arrow.push()
-                    }
-            )
     }
 
     // MARK: - Helpers
@@ -419,7 +412,7 @@ private struct SkillCellToggle: View {
     let onToggle: () -> Void
     var body: some View {
         Toggle(isOn: Binding(get: { enabled }, set: { _ in onToggle() })) {}
-            .labelsHidden().toggleStyle(.switch).controlSize(.mini).frame(width: 104)
+            .labelsHidden().toggleStyle(.switch).controlSize(.mini).frame(width: 68)
     }
 }
 
@@ -428,6 +421,6 @@ private struct TriStateToggle: View {
     let onToggle: (Bool) -> Void
     var body: some View {
         Toggle(isOn: Binding(get: { state == true }, set: { onToggle($0) })) {}
-            .labelsHidden().toggleStyle(.switch).controlSize(.mini).frame(width: 104)
+            .labelsHidden().toggleStyle(.switch).controlSize(.mini).frame(width: 68)
     }
 }

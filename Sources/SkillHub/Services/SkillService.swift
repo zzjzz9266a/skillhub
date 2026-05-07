@@ -190,7 +190,7 @@ final class SkillService {
 
     func refreshDescriptions() throws {
         let skills = try database.dbQueue.read { db in
-            try Skill.filter(Skill.Columns.description == nil).fetchAll(db)
+            try Skill.fetchAll(db)
         }
         for var skill in skills {
             let meta = parseMetadata(from: skill.installPath)
@@ -433,19 +433,82 @@ final class SkillService {
         let parts = content.components(separatedBy: "---")
         guard parts.count >= 3 else { return ([], nil) }
         let frontmatter = parts[1]
+        let lines = frontmatter.components(separatedBy: "\n")
         var groups: [String] = []
         var description: String? = nil
-        for line in frontmatter.components(separatedBy: "\n") {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
+        var i = 0
+        while i < lines.count {
+            let trimmed = lines[i].trimmingCharacters(in: .whitespaces)
             if trimmed.hasPrefix("groups:") || trimmed.hasPrefix("group:") {
                 let values = trimmed.split(separator: ":").last?.trimmingCharacters(in: .whitespaces) ?? ""
                 groups = values.components(separatedBy: ",")
                     .map { $0.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "[]\"'")) }
                     .filter { !$0.isEmpty }
             } else if trimmed.hasPrefix("description:") {
-                description = trimmed.split(separator: ":", maxSplits: 1).last?.trimmingCharacters(in: .whitespaces)
-                    .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+                let afterColon = trimmed.split(separator: ":", maxSplits: 1).last?
+                    .trimmingCharacters(in: .whitespaces) ?? ""
+                if afterColon == "|" || afterColon == ">" {
+                    let indicator = afterColon
+                    var blockLines: [String] = []
+                    let baseIndent: Int = {
+                        if i + 1 < lines.count {
+                            let nextLine = lines[i + 1]
+                            let leading = nextLine.prefix(while: { $0 == " " || $0 == "\t" })
+                            return leading.count
+                        }
+                        return 0
+                    }()
+                    i += 1
+                    while i < lines.count {
+                        let line = lines[i]
+                        let leading = line.prefix(while: { $0 == " " || $0 == "\t" }).count
+                        let stripped = line.trimmingCharacters(in: .whitespaces)
+                        if stripped.isEmpty { blockLines.append("") }
+                        else if leading >= baseIndent { blockLines.append(String(line.dropFirst(min(leading, baseIndent)))) }
+                        else { break }
+                        i += 1
+                    }
+                    if indicator == "|" {
+                        description = blockLines.joined(separator: "\n")
+                    } else {
+                        description = blockLines.map { $0.trimmingCharacters(in: .whitespaces) }
+                            .filter { !$0.isEmpty }
+                            .joined(separator: " ")
+                    }
+                    continue
+                } else if afterColon.hasPrefix(">") {
+                    let foldedRest = afterColon.dropFirst().trimmingCharacters(in: .whitespaces)
+                    if foldedRest.isEmpty {
+                        var blockLines: [String] = []
+                        let baseIndent: Int = {
+                            if i + 1 < lines.count {
+                                let nextLine = lines[i + 1]
+                                let leading = nextLine.prefix(while: { $0 == " " || $0 == "\t" })
+                                return leading.count
+                            }
+                            return 0
+                        }()
+                        i += 1
+                        while i < lines.count {
+                            let line = lines[i]
+                            let leading = line.prefix(while: { $0 == " " || $0 == "\t" }).count
+                            let stripped = line.trimmingCharacters(in: .whitespaces)
+                            if stripped.isEmpty { blockLines.append("") }
+                            else if leading >= baseIndent { blockLines.append(String(line.dropFirst(min(leading, baseIndent)))) }
+                            else { break }
+                            i += 1
+                        }
+                        description = blockLines.map { $0.trimmingCharacters(in: .whitespaces) }
+                            .filter { !$0.isEmpty }
+                            .joined(separator: " ")
+                    } else {
+                        description = foldedRest
+                    }
+                } else {
+                    description = afterColon.trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+                }
             }
+            i += 1
         }
         return (groups, description)
     }
