@@ -14,9 +14,19 @@ final class AppViewModel: ObservableObject {
     @Published var showPreview: Bool = false
     @Published var previewSkills: [SkillService.DiscoveredSkill] = []
     @Published var previewIsReinstall: Bool = false
+    @Published var searchText: String = ""
+    @Published var showAddSourcePopover: Bool = false
+    @Published var syncStatus: SyncStatus = .idle
     var previewResolvedSource: SkillService.ResolvedSource?
     var previewSourceName: String = ""
     var previewSourceLabel: String = ""
+
+    enum SyncStatus: Equatable {
+        case idle
+        case syncing
+        case ok(lastUpdate: Date)
+        case error(String)
+    }
 
     // MARK: - Services
     let database: DatabaseService
@@ -67,6 +77,7 @@ final class AppViewModel: ObservableObject {
         let agentCount = agents.count
         let skillCount = skills.count
         statusText = "\(agentCount) agents detected | \(skillCount) skills installed"
+        syncStatus = .ok(lastUpdate: Date())
     }
 
     // MARK: - Toggle operations
@@ -89,6 +100,7 @@ final class AppViewModel: ObservableObject {
         } catch {
             agentSkillStates[agentId] = (try? syncService.getAgentSkillStates(agentId: agentId)) ?? agentSkillStates[agentId] ?? [:]
             statusText = "Sync failed: \(error.localizedDescription)"
+            syncStatus = .error("Sync failed")
         }
     }
 
@@ -156,6 +168,7 @@ final class AppViewModel: ObservableObject {
                 DispatchQueue.main.async {
                     self.updatingSourceIds.remove(sourceId)
                     self.statusText = "Update failed: \(error.localizedDescription)"
+                    self.syncStatus = .error(error.localizedDescription)
                 }
             }
         }
@@ -316,24 +329,7 @@ final class AppViewModel: ObservableObject {
 
     /// Source → Group → Skill tree for the matrix
     func buildTree() -> [(source: Source, groups: [(name: String, skills: [Skill])])] {
-        let sourceList = selectedSourceId == nil
-            ? sources
-            : sources.filter { $0.id == selectedSourceId }
-
-        return sourceList.map { source in
-            let sourceSkills = skillsForSource(source.id)
-            let grouped = Dictionary(grouping: sourceSkills) { skill in
-                skill.groups.first ?? "ungrouped"
-            }
-            let sortedGroups = grouped
-                .map { (name: $0.key, skills: $0.value) }
-                .sorted { a, b in
-                    if a.name == "ungrouped" { return false }
-                    if b.name == "ungrouped" { return true }
-                    return a.name < b.name
-                }
-            return (source: source, groups: sortedGroups)
-        }
+        return buildTree(skills: nil)
     }
 
     /// Returns the batch toggle state for a group: true = all enabled, false = all disabled, nil = mixed
@@ -376,6 +372,20 @@ final class AppViewModel: ObservableObject {
         return skills.filter { $0.sourceId == sourceId }
     }
 
+    var searchFilteredSkills: [Skill] {
+        let base = filteredSkills
+        guard !searchText.trimmingCharacters(in: .whitespaces).isEmpty else { return base }
+        let q = searchText.lowercased()
+        return base.filter { $0.name.lowercased().contains(q) }
+    }
+
+    /// Sidebar count — filters by searchText only, NOT by selectedSourceId
+    var searchFilteredAllSkills: [Skill] {
+        guard !searchText.trimmingCharacters(in: .whitespaces).isEmpty else { return skills }
+        let q = searchText.lowercased()
+        return skills.filter { $0.name.lowercased().contains(q) }
+    }
+
     var visibleAgents: [Agent] {
         agents.filter { $0.visible }
     }
@@ -398,5 +408,47 @@ final class AppViewModel: ObservableObject {
             return groupName == "ungrouped"
         }
         return skill.groups.contains(groupName)
+    }
+
+    // MARK: - Progress helpers for ProgressPill
+
+    func sourceProgressState(sourceId: Int64, agentId: Int64) -> (enabled: Int, total: Int) {
+        let sourceSkills = skills.filter { $0.sourceId == sourceId }
+        let enabledCount = sourceSkills.filter { agentSkillStates[agentId]?[$0.id] == true }.count
+        return (enabledCount, sourceSkills.count)
+    }
+
+    func groupProgressState(sourceId: Int64, groupName: String, agentId: Int64) -> (enabled: Int, total: Int) {
+        let groupSkills = skills.filter { $0.sourceId == sourceId && skill($0, belongsTo: groupName) }
+        let enabledCount = groupSkills.filter { agentSkillStates[agentId]?[$0.id] == true }.count
+        return (enabledCount, groupSkills.count)
+    }
+
+    // MARK: - Search-filtered tree
+
+    func buildFilteredTree() -> [(source: Source, groups: [(name: String, skills: [Skill])])] {
+        return buildTree(skills: searchFilteredSkills)
+    }
+
+    func buildTree(skills overrideSkills: [Skill]? = nil) -> [(source: Source, groups: [(name: String, skills: [Skill])])] {
+        let skillsToUse = overrideSkills ?? filteredSkills
+        let sourceList = selectedSourceId == nil
+            ? sources
+            : sources.filter { $0.id == selectedSourceId }
+
+        return sourceList.map { source in
+            let sourceSkills = skillsToUse.filter { $0.sourceId == source.id }
+            let grouped = Dictionary(grouping: sourceSkills) { skill in
+                skill.groups.first ?? "ungrouped"
+            }
+            let sortedGroups = grouped
+                .map { (name: $0.key, skills: $0.value) }
+                .sorted { a, b in
+                    if a.name == "ungrouped" { return false }
+                    if b.name == "ungrouped" { return true }
+                    return a.name < b.name
+                }
+            return (source: source, groups: sortedGroups)
+        }
     }
 }

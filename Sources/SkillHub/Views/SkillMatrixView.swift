@@ -8,7 +8,7 @@ struct SkillMatrixView: View {
     @State private var hoveredSkillId: Int64? = nil
     @State private var skillColumnWidth: CGFloat = 200
 
-    private let agentColumnWidth: CGFloat = 68
+    private let agentColumnWidth: CGFloat = 96
 
     var body: some View {
         if viewModel.visibleAgents.isEmpty {
@@ -39,13 +39,13 @@ struct SkillMatrixView: View {
     }
 
     private var matrixContent: some View {
-        let tree = viewModel.buildTree()
+        let tree = viewModel.buildFilteredTree()
 
         return VStack(spacing: 0) {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Skill Matrix").font(.system(size: 17, weight: .semibold))
-                    Text("\(viewModel.filteredSkills.count) skills across \(viewModel.visibleAgents.count) agents")
+                    Text("\(viewModel.searchFilteredSkills.count) skills across \(viewModel.visibleAgents.count) agents")
                         .font(.system(size: 12)).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -120,14 +120,26 @@ struct SkillMatrixView: View {
             Color.clear
                 .frame(width: width, alignment: .leading)
             ForEach(viewModel.visibleAgents) { agent in
-                Text(agent.name)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2).multilineTextAlignment(.center)
-                    .frame(width: agentColumnWidth, alignment: .center)
+                VStack(spacing: 3) {
+                    Text(agent.name)
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+
+                    HStack(spacing: 3) {
+                        Circle()
+                            .fill(agent.installed ? Color.green : Color.secondary.opacity(0.4))
+                            .frame(width: 5, height: 5)
+                        Text(agent.installed ? "installed" : "not found")
+                            .font(.system(size: 9.5))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .frame(width: agentColumnWidth, alignment: .center)
             }
         }
-        .frame(height: 34)
+        .frame(height: 42)
         .background(Color(nsColor: .controlBackgroundColor).opacity(0.55))
     }
 
@@ -164,11 +176,11 @@ struct SkillMatrixView: View {
             Color.clear
                 .frame(width: width, alignment: .leading)
             ForEach(viewModel.visibleAgents) { agent in
-                let state = viewModel.sourceToggleState(sourceId: source.id, agentId: agent.id)
-                TriStateToggle(state: state) { enable in
+                let progress = viewModel.sourceProgressState(sourceId: source.id, agentId: agent.id)
+                ProgressPill(enabled: progress.enabled, total: progress.total) { enable in
                     viewModel.toggleSource(sourceId: source.id, agentId: agent.id, enabled: enable)
                 }
-                .frame(width: agentColumnWidth)
+                .frame(width: agentColumnWidth, alignment: .center)
             }
         }
         .frame(height: 34)
@@ -184,11 +196,11 @@ struct SkillMatrixView: View {
                 Color.clear
                     .frame(width: width, alignment: .leading)
                 ForEach(viewModel.visibleAgents) { agent in
-                    let state = viewModel.groupToggleState(sourceId: source.id, groupName: groupName, agentId: agent.id)
-                    TriStateToggle(state: state) { enable in
+                    let progress = viewModel.groupProgressState(sourceId: source.id, groupName: groupName, agentId: agent.id)
+                    ProgressPill(enabled: progress.enabled, total: progress.total) { enable in
                         viewModel.toggleGroup(sourceId: source.id, groupName: groupName, agentId: agent.id, enabled: enable)
                     }
-                    .frame(width: agentColumnWidth)
+                    .frame(width: agentColumnWidth, alignment: .center)
                 }
             }
             .frame(height: 32)
@@ -233,9 +245,8 @@ struct SkillMatrixView: View {
         Text("Skill")
             .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(.secondary)
-            .frame(width: width, alignment: .leading)
+            .frame(width: width, height: 42, alignment: .leading)
             .padding(.horizontal, 12)
-            .frame(height: 34)
             .background(Color(nsColor: .controlBackgroundColor).opacity(0.55))
     }
 
@@ -345,7 +356,7 @@ struct SkillMatrixView: View {
         let isPopoverShown = popoverSkillId == skill.id
 
         return HStack(spacing: 4) {
-            Color.clear.frame(width: 16, height: 16)
+            Color.clear.frame(width: 36, height: 16)
             Color.clear.frame(width: 13, height: 13)
             Text(displayName(for: skill, sourceLabel: sourceLabel))
                 .font(.system(size: 13)).lineLimit(1).truncationMode(.tail)
@@ -416,11 +427,55 @@ private struct SkillCellToggle: View {
     }
 }
 
-private struct TriStateToggle: View {
-    let state: Bool?
-    let onToggle: (Bool) -> Void
+private struct ProgressPill: View {
+    let enabled: Int
+    let total: Int
+    let onToggleAll: (Bool) -> Void
+
+    private var ratio: Double {
+        total > 0 ? Double(enabled) / Double(total) : 0
+    }
+
+    private var isFull: Bool { enabled == total }
+    private var isEmpty: Bool { enabled == 0 }
+
     var body: some View {
-        Toggle(isOn: Binding(get: { state == true }, set: { onToggle($0) })) {}
-            .labelsHidden().toggleStyle(.switch).controlSize(.mini).frame(width: 68)
+        Button {
+            onToggleAll(!isFull)
+        } label: {
+            HStack(spacing: 6) {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(Color.accentColor.opacity(0.15))
+                            .frame(height: 5)
+                        Capsule()
+                            .fill(Color.accentColor)
+                            .frame(width: max(geo.size.width * ratio, ratio > 0 ? 5 : 0), height: 5)
+                    }
+                }
+                .frame(width: 28, height: 5)
+
+                Text("\(enabled)/\(total)")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(isEmpty ? .secondary : (isFull ? Color.accentColor : .secondary))
+                    .monospacedDigit()
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(
+                Capsule()
+                    .fill(isFull
+                          ? Color.accentColor.opacity(0.12)
+                          : Color.secondary.opacity(0.12))
+            )
+        }
+        .buttonStyle(.plain)
+        .help(isFull ? "Click to disable all" : "Click to enable all")
+        .simultaneousGesture(
+            TapGesture()
+                .modifiers(.option)
+                .onEnded { _ in onToggleAll(false) }
+        )
     }
 }

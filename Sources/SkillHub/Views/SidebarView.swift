@@ -7,14 +7,9 @@ struct SidebarView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 18) {
-                Text("SkillHub")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.primary)
-                    .padding(.leading, 8)
-
                 sourceSection
             }
-            .padding(.top, 54)
+            .padding(.top, 14)
             .padding(.horizontal, 12)
 
             ScrollView {
@@ -38,24 +33,23 @@ struct SidebarView: View {
 
                 ForEach(viewModel.agents) { agent in
                     HStack(spacing: 8) {
-                        Circle()
-                            .fill(agent.installed ? Color.green : Color.secondary.opacity(0.4))
-                            .frame(width: 7, height: 7)
+                        AgentLogoView(agentName: agent.name, installed: agent.installed)
+                            .frame(width: 20, height: 20)
+
                         Text(agent.name)
                             .lineLimit(1)
                             .font(.system(size: 13))
+                            .foregroundStyle(agent.installed ? .primary : .secondary)
+
                         Spacer()
-                        Toggle(isOn: Binding(
-                            get: { agent.visible },
-                            set: { _ in viewModel.toggleAgentVisibility(agent.id) }
-                        )) {}
-                            .labelsHidden()
-                            .toggleStyle(.switch)
-                            .controlSize(.mini)
+
+                        VisibilityCheckbox(isChecked: agent.visible) {
+                            viewModel.toggleAgentVisibility(agent.id)
+                        }
                     }
-                    .foregroundStyle(.primary)
                     .padding(.horizontal, 10)
                     .frame(height: 28)
+                    .contentShape(Rectangle())
                     .help(agent.visible ? "Hide from matrix" : "Show in matrix")
                 }
             }
@@ -63,7 +57,7 @@ struct SidebarView: View {
             .padding(.vertical, 14)
         }
         .background {
-            VisualEffectView(material: .sidebar, blendingMode: .behindWindow)
+            VisualEffectView(material: .sidebar, blendingMode: .withinWindow)
                 .ignoresSafeArea()
         }
         .overlay(alignment: .trailing) {
@@ -96,20 +90,24 @@ struct SidebarView: View {
     }
 
     private var allSkillsRow: some View {
-        sidebarButton(
+        let count = viewModel.searchFilteredAllSkills.count
+        return sidebarButton(
             title: "All Skills",
             systemImage: "tray.full",
-            isSelected: viewModel.selectedSourceId == nil
+            isSelected: viewModel.selectedSourceId == nil,
+            count: count
         ) {
             viewModel.selectedSourceId = nil
         }
     }
 
     private func sourceRow(_ source: Source) -> some View {
-        sidebarButton(
+        let count = viewModel.searchFilteredAllSkills.filter { $0.sourceId == source.id }.count
+        return sidebarButton(
             title: source.label,
             systemImage: "shippingbox",
-            isSelected: viewModel.selectedSourceId == source.id
+            isSelected: viewModel.selectedSourceId == source.id,
+            count: count
         ) {
             viewModel.selectedSourceId = source.id
         }
@@ -130,24 +128,31 @@ struct SidebarView: View {
         }
     }
 
-    private func sidebarButton(title: String, systemImage: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+    private func sidebarButton(title: String, systemImage: String, isSelected: Bool, count: Int? = nil, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 9) {
                 Image(systemName: systemImage)
                     .font(.system(size: 15))
                     .frame(width: 18)
+                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
                 Text(title)
                     .font(.system(size: 13))
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Spacer(minLength: 0)
+                if let count = count, count > 0 {
+                    Text("\(count)")
+                        .font(.system(size: 11))
+                        .foregroundStyle(isSelected ? Color.accentColor.opacity(0.7) : Color(nsColor: .tertiaryLabelColor))
+                        .monospacedDigit()
+                }
             }
-            .foregroundStyle(isSelected ? .primary : .secondary)
+            .foregroundStyle(isSelected ? Color.accentColor : .primary)
             .padding(.horizontal, 10)
             .frame(height: 30)
             .background {
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(isSelected ? Color.accentColor.opacity(0.16) : Color.clear)
+                    .fill(isSelected ? Color.accentColor.opacity(0.10) : Color.clear)
             }
             .contentShape(RoundedRectangle(cornerRadius: 6))
         }
@@ -161,4 +166,4 @@ struct SidebarView: View {
             .padding(.horizontal, 8)
     }
 
-    }
+}
