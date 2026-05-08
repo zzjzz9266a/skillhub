@@ -74,6 +74,25 @@ my-skills/
     └── sql-helper.md    # grouped under "tools"
 ```
 
+## Roadmap
+
+**v1.x — Polish**
+- [ ] Custom folders within a source — drag skills into your own groupings without touching the source repo
+- [ ] Skill detail panel — description, file path, enabled-by summary in one popover
+- [ ] Update notifications — badge when a Git source has new commits upstream
+- [ ] Full-text search — search skill descriptions and tags, not just names
+
+**v2 — Expand**
+- [ ] More agents — Cursor, Aider, Continue.dev, Cline
+- [ ] Skill Profiles — save a named set of toggles ("Web mode", "Data mode") and switch between them in one click
+- [ ] iCloud sync — share toggle state across multiple Macs
+
+**v3 — Ecosystem**
+- [ ] Skill browser — search and install public skill repos from GitHub without leaving the app
+- [ ] CLI companion — `skillhub enable <skill> --agent claude` for terminal workflows
+
+Have an idea? [Open an issue](https://github.com/zzjzz9266a/skillhub/issues).
+
 ## Tech stack
 
 - **SwiftUI + AppKit** — native macOS UI, `NSVisualEffectView` for sidebar vibrancy
