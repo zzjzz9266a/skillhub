@@ -6,6 +6,8 @@ A native macOS app for managing AI coding agent skills across multiple agents.
 ![Swift 5.9](https://img.shields.io/badge/Swift-5.9-orange?style=flat-square&logo=swift)
 ![License MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
 
+![SkillHub screenshot](screenshots/screenshot.png)
+
 ## What is this
 
 AI coding agents like Claude Code, Codex, and OpenCode support "skills" — Markdown files dropped into a config directory that give the agent extra context, instructions, or domain knowledge. Managing these across multiple agents and multiple skill sources quickly becomes painful: which skills are enabled for which agent? How do you enable a whole source at once?
