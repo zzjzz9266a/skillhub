@@ -6,6 +6,8 @@ A native macOS app for managing AI coding agent skills across multiple agents.
 ![Swift 5.9](https://img.shields.io/badge/Swift-5.9-orange?style=flat-square&logo=swift)
 ![License MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
 
+English | [中文](README.zh.md)
+
 ![SkillHub screenshot](screenshots/screenshot.png)
 
 ## What is this
