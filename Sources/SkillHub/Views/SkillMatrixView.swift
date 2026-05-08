@@ -45,7 +45,7 @@ struct SkillMatrixView: View {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Skill Matrix").font(.system(size: 17, weight: .semibold))
-                    Text("\(viewModel.searchFilteredSkills.count) skills across \(viewModel.visibleAgents.count) agents")
+                    Text("\(viewModel.searchFilteredSkills.count) skills · \(viewModel.visibleAgents.count) visible agents")
                         .font(.system(size: 12)).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -53,9 +53,13 @@ struct SkillMatrixView: View {
             .padding(.top, 18).padding(.horizontal, 24).padding(.bottom, 12)
 
             GeometryReader { geo in
-                let treeWidth = computeSkillColumnWidth(tree: tree)
-                let totalContentWidth = treeWidth + CGFloat(viewModel.visibleAgents.count) * agentColumnWidth
-                let needsHScroll = totalContentWidth > geo.size.width
+                let agentColumnsWidth = CGFloat(viewModel.visibleAgents.count) * agentColumnWidth
+                let minSkillWidth = computeSkillColumnWidth(tree: tree)
+                // 首列填满剩余空间；仅当内容超出时才横向滚动
+                let needsHScroll = minSkillWidth + agentColumnsWidth > geo.size.width
+                let treeWidth = needsHScroll
+                    ? minSkillWidth
+                    : geo.size.width - agentColumnsWidth
 
                 ScrollView(.vertical, showsIndicators: true) {
                     ZStack(alignment: .topLeading) {
@@ -89,20 +93,31 @@ struct SkillMatrixView: View {
         var maxWidth: CGFloat = 0
         let font = NSFont.systemFont(ofSize: 13)
         let boldFont = NSFont.systemFont(ofSize: 13, weight: .semibold)
+        let headerFont = NSFont.systemFont(ofSize: 11, weight: .semibold)
+
+        let headerW = ceil(("SKILL" as NSString).size(withAttributes: [.font: headerFont]).width) + 40 // 20px padding each side
+
         for item in tree {
-            let sourceW = ceil((item.source.label as NSString).size(withAttributes: [.font: boldFont]).width)
+            // Source row: 12px padding + chevron(16) + gap(4) + icon(13) + gap(4) + text + meta(24) + action(18) + trailing(4)
+            let sourceW = 12 + 16 + 4 + 13 + 4 + ceil((item.source.label as NSString).size(withAttributes: [.font: boldFont]).width) + 24 + 18 + 4
             maxWidth = max(maxWidth, sourceW)
+
             for group in item.groups {
-                let groupW = ceil((displayName(for: group.name) as NSString).size(withAttributes: [.font: font]).width)
+                // Group row: 12px padding + chevron(16) + gap(4) + folder(13) + gap(4) + text + "(n)" + trailing(4)
+                let groupNameW = ceil((displayName(for: group.name) as NSString).size(withAttributes: [.font: font]).width)
+                let countW = ceil(("(\(group.skills.count))" as NSString).size(withAttributes: [.font: font]).width)
+                let groupW = 12 + 16 + 4 + 13 + 4 + groupNameW + 4 + countW + 4
                 maxWidth = max(maxWidth, groupW)
+
                 for skill in group.skills {
                     let skillName = displayName(for: skill, sourceLabel: item.source.label)
-                    let skillW = ceil((skillName as NSString).size(withAttributes: [.font: font]).width)
+                    // Skill row: 12px padding + spacer(31) + spacer(13) + gap(4) + text + info(18) + trailing(4)
+                    let skillW = 12 + 31 + 13 + 4 + ceil((skillName as NSString).size(withAttributes: [.font: font]).width) + 18 + 4
                     maxWidth = max(maxWidth, skillW)
                 }
             }
         }
-        return max(maxWidth + 49 + 24, 120)
+        return max(maxWidth, headerW, 180)
     }
 
     // MARK: - Full-width matrix content
@@ -137,17 +152,26 @@ struct SkillMatrixView: View {
                     }
                 }
                 .frame(width: agentColumnWidth, alignment: .center)
+                .overlay(alignment: .leading) {
+                    Rectangle()
+                        .fill(Color(nsColor: .separatorColor).opacity(0.5))
+                        .frame(width: 0.5)
+                }
             }
         }
         .frame(height: 42)
         .background(Color(nsColor: .controlBackgroundColor).opacity(0.55))
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color(nsColor: .separatorColor).opacity(0.5))
+                .frame(height: 0.5)
+        }
     }
 
     @ViewBuilder
     private func fullWidthRows(tree: [(source: Source, groups: [(name: String, skills: [Skill])])], width: CGFloat) -> some View {
         ForEach(tree, id: \.source.id) { item in
             fullWidthForSource(source: item.source, groups: item.groups, width: width)
-            Divider()
         }
     }
 
@@ -181,10 +205,19 @@ struct SkillMatrixView: View {
                     viewModel.toggleSource(sourceId: source.id, agentId: agent.id, enabled: enable)
                 }
                 .frame(width: agentColumnWidth, alignment: .center)
+                .overlay(alignment: .leading) {
+                    Rectangle()
+                        .fill(Color(nsColor: .separatorColor).opacity(0.5))
+                        .frame(width: 0.5)
+                }
             }
         }
-        .frame(height: 34)
-        .background(Color(nsColor: .controlBackgroundColor).opacity(0.35))
+        .frame(height: 36)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color(nsColor: .separatorColor).opacity(0.5))
+                .frame(height: 0.5)
+        }
     }
 
     @ViewBuilder
@@ -201,10 +234,19 @@ struct SkillMatrixView: View {
                         viewModel.toggleGroup(sourceId: source.id, groupName: groupName, agentId: agent.id, enabled: enable)
                     }
                     .frame(width: agentColumnWidth, alignment: .center)
+                    .overlay(alignment: .leading) {
+                        Rectangle()
+                            .fill(Color(nsColor: .separatorColor).opacity(0.5))
+                            .frame(width: 0.5)
+                    }
                 }
             }
-            .frame(height: 32)
-            .background(Color(nsColor: .controlBackgroundColor).opacity(0.18))
+            .frame(height: 36)
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(Color(nsColor: .separatorColor).opacity(0.5))
+                    .frame(height: 0.5)
+            }
 
             if isExpanded {
                 ForEach(skills) { skill in
@@ -224,9 +266,19 @@ struct SkillMatrixView: View {
                     viewModel.toggleSkill(skillId: skill.id, agentId: agent.id, enabled: !enabled)
                 }
                 .frame(width: agentColumnWidth)
+                .overlay(alignment: .leading) {
+                    Rectangle()
+                        .fill(Color(nsColor: .separatorColor).opacity(0.5))
+                        .frame(width: 0.5)
+                }
             }
         }
-        .frame(height: 34)
+        .frame(height: 36)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color(nsColor: .separatorColor).opacity(0.5))
+                .frame(height: 0.5)
+        }
     }
 
     // MARK: - Frozen skill column (overlay)
@@ -242,19 +294,24 @@ struct SkillMatrixView: View {
     }
 
     private func frozenHeader(width: CGFloat) -> some View {
-        Text("Skill")
-            .font(.system(size: 12, weight: .semibold))
+        Text("SKILL")
+            .font(.system(size: 11, weight: .semibold))
             .foregroundStyle(.secondary)
+            .tracking(0.05)
             .frame(width: width, height: 42, alignment: .leading)
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 20)
             .background(Color(nsColor: .controlBackgroundColor).opacity(0.55))
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(Color(nsColor: .separatorColor).opacity(0.5))
+                    .frame(height: 0.5)
+            }
     }
 
     @ViewBuilder
     private func frozenSkillRows(tree: [(source: Source, groups: [(name: String, skills: [Skill])])], width: CGFloat) -> some View {
         ForEach(tree, id: \.source.id) { item in
             frozenSourceRow(source: item.source, groups: item.groups, width: width)
-            Divider()
         }
     }
 
@@ -274,8 +331,10 @@ struct SkillMatrixView: View {
                 }
                 .buttonStyle(.plain)
 
-                Image(systemName: "shippingbox").font(.system(size: 13)).foregroundStyle(.secondary)
+                Image(systemName: "shippingbox").font(.system(size: 13)).foregroundStyle(Color.accentColor)
                 Text(source.label).font(.system(size: 13, weight: .semibold)).lineLimit(1).truncationMode(.tail)
+
+                Spacer(minLength: 0)
 
                 if isGitSource && !isUpdating && hoveredSourceId == source.id {
                     Button {
@@ -293,7 +352,6 @@ struct SkillMatrixView: View {
                         .controlSize(.mini)
                         .frame(width: 16, height: 16)
                 }
-                Spacer(minLength: 0)
             }
             .padding(.horizontal, 12)
             .frame(width: width, alignment: .leading)
@@ -302,8 +360,12 @@ struct SkillMatrixView: View {
             .onHover { hovering in
                 hoveredSourceId = hovering ? source.id : nil
             }
-            .frame(height: 34)
-            .background(Color(nsColor: .controlBackgroundColor).opacity(0.35))
+            .frame(height: 36)
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(Color(nsColor: .separatorColor).opacity(0.5))
+                    .frame(height: 0.5)
+            }
 
             if isExpanded {
                 if groups.count == 1 && groups.first?.name == "ungrouped" {
@@ -331,8 +393,8 @@ struct SkillMatrixView: View {
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: 11, weight: .medium)).frame(width: 16, height: 16)
                     Image(systemName: "folder").font(.system(size: 13)).foregroundStyle(.secondary)
-                    Text(displayName(for: groupName)).font(.system(size: 13)).lineLimit(1)
-                    Text("(\(skills.count))").font(.system(size: 12)).foregroundColor(.secondary)
+                    Text(displayName(for: groupName)).font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary).lineLimit(1)
+                    Text("(\(skills.count))").font(.system(size: 12)).foregroundStyle(.secondary)
                     Spacer(minLength: 0)
                 }
                 .padding(.horizontal, 12)
@@ -340,8 +402,12 @@ struct SkillMatrixView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .frame(height: 32)
-            .background(Color(nsColor: .controlBackgroundColor).opacity(0.18))
+            .frame(height: 36)
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(Color(nsColor: .separatorColor).opacity(0.5))
+                    .frame(height: 0.5)
+            }
 
             if isExpanded {
                 ForEach(skills) { skill in
@@ -356,10 +422,11 @@ struct SkillMatrixView: View {
         let isPopoverShown = popoverSkillId == skill.id
 
         return HStack(spacing: 4) {
-            Color.clear.frame(width: 36, height: 16)
+            Color.clear.frame(width: 31, height: 16)
             Color.clear.frame(width: 13, height: 13)
             Text(displayName(for: skill, sourceLabel: sourceLabel))
                 .font(.system(size: 13)).lineLimit(1).truncationMode(.tail)
+            Spacer(minLength: 0)
             if hasDesc && hoveredSkillId == skill.id {
                 Button {
                     popoverSkillId = popoverSkillId == skill.id ? nil : skill.id
@@ -376,14 +443,19 @@ struct SkillMatrixView: View {
                     skillPopoverContent(skill: skill)
                 }
             }
-            Spacer(minLength: 0)
         }
         .padding(.horizontal, 12)
         .frame(width: width, alignment: .leading)
+        .contentShape(Rectangle())
         .onHover { hovering in
             hoveredSkillId = hovering ? skill.id : nil
         }
-        .frame(height: 34)
+        .frame(height: 36)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color(nsColor: .separatorColor).opacity(0.5))
+                .frame(height: 0.5)
+        }
     }
 
     @ViewBuilder

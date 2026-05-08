@@ -12,19 +12,19 @@ struct FooterStatusBar: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            HStack(spacing: 10) {
+            HStack(spacing: 12) {
                 statItem(value: viewModel.skills.count, label: "skills")
                 divider
                 statItem(value: viewModel.visibleAgents.count, label: "visible agents")
                 divider
                 statItem(value: allEnabledCount, label: "active")
             }
-            .padding(.leading, 16)
+            .padding(.leading, 14)
 
             Spacer()
 
             syncIndicator
-                .padding(.trailing, 16)
+                .padding(.trailing, 14)
         }
         .frame(height: 28)
         .background {
@@ -32,12 +32,12 @@ struct FooterStatusBar: View {
                 .ignoresSafeArea()
         }
         .overlay(alignment: .top) { Divider() }
-        .font(.system(size: 12))
+        .font(.system(size: 11))
         .foregroundStyle(.secondary)
     }
 
     private func statItem(value: Int, label: String) -> some View {
-        HStack(spacing: 3) {
+        HStack(spacing: 4) {
             Text("\(value)")
                 .fontWeight(.semibold)
                 .foregroundStyle(.primary)
@@ -48,8 +48,16 @@ struct FooterStatusBar: View {
 
     private var divider: some View {
         Rectangle()
-            .fill(Color.secondary.opacity(0.35))
-            .frame(width: 1, height: 12)
+            .fill(Color(nsColor: .separatorColor))
+            .frame(width: 1, height: 10)
+    }
+
+    private func relativeTime(_ date: Date) -> String {
+        let interval = -date.timeIntervalSinceNow
+        if interval < 60 { return "just now" }
+        if interval < 3600 { return "\(Int(interval / 60))m ago" }
+        if interval < 86400 { return "\(Int(interval / 3600))h ago" }
+        return "\(Int(interval / 86400))d ago"
     }
 
     @ViewBuilder
@@ -63,14 +71,16 @@ struct FooterStatusBar: View {
                 Text("Syncing…")
             }
         case .ok(let date):
-            HStack(spacing: 4) {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-                    .font(.system(size: 10))
-                Text("All in sync")
-                Text("·")
-                Text("Updated \(date, format: .relative(presentation: .named))")
-                    .foregroundStyle(.tertiary)
+            HStack(spacing: 12) {
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                        .font(.system(size: 10))
+                    Text("All in sync")
+                        .foregroundStyle(Color(red: 0.18, green: 0.82, blue: 0.34))
+                }
+                divider
+                Text("Last update \(relativeTime(date))")
             }
         case .error(let msg):
             HStack(spacing: 4) {

@@ -23,8 +23,6 @@ struct ContentView: View {
                         TextField("Search skills…", text: $viewModel.searchText)
                             .textFieldStyle(.plain)
                             .font(.system(size: 12))
-                            .frame(width: viewModel.searchText.isEmpty ? 160 : 240)
-                            .animation(.easeInOut(duration: 0.15), value: viewModel.searchText.isEmpty)
                             .focused($searchFocused)
                         if !viewModel.searchText.isEmpty {
                             Button {
@@ -46,7 +44,20 @@ struct ContentView: View {
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 6))
+                    .frame(width: searchFocused ? 360 : 280)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color(nsColor: .controlBackgroundColor))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .strokeBorder(
+                                searchFocused ? Color.accentColor : Color.secondary.opacity(0.12),
+                                lineWidth: searchFocused ? 1 : 0.5
+                            )
+                    )
+                    .shadow(color: searchFocused ? Color.accentColor.opacity(0.25) : .clear, radius: 4)
+                    .animation(.easeInOut(duration: 0.15), value: searchFocused)
                 }
 
                 Spacer()
