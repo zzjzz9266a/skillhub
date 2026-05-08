@@ -42,7 +42,7 @@ SkillHub gives you a single window to see and control all of it.
 ## Build & run
 
 ```bash
-git clone https://github.com/your-username/skillhub.git
+git clone https://github.com/zzjzz9266a/skillhub.git
 cd skillhub
 swift run
 ```
