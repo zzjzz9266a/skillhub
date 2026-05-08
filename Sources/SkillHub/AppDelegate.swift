@@ -14,6 +14,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
 
+        if let iconURL = Bundle.module.url(forResource: "AppIcon", withExtension: "icns"),
+           let icon = NSImage(contentsOf: iconURL) {
+            let outSize = NSSize(width: 256, height: 256)
+            let clipped = NSImage(size: outSize, flipped: false) { rect in
+                let inset = rect.insetBy(dx: 14, dy: 14)
+                let path = NSBezierPath(roundedRect: inset, xRadius: 52, yRadius: 52)
+                path.addClip()
+                icon.draw(in: inset, from: .zero, operation: .sourceOver, fraction: 1.0)
+                return true
+            }
+            NSApp.applicationIconImage = clipped
+        }
+
         menuBarView = MenuBarView(viewModel: viewModel, appDelegate: self)
         viewModel.refresh()
         menuBarView?.updateButtonTitle()

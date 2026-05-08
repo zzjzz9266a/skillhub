@@ -8,7 +8,7 @@ struct SkillMatrixView: View {
     @State private var hoveredSkillId: Int64? = nil
     @State private var skillColumnWidth: CGFloat = 200
 
-    private let agentColumnWidth: CGFloat = 96
+    private let agentColumnWidth: CGFloat = 116
 
     var body: some View {
         if viewModel.visibleAgents.isEmpty {
@@ -50,7 +50,7 @@ struct SkillMatrixView: View {
                 }
                 Spacer()
             }
-            .padding(.top, 18).padding(.horizontal, 24).padding(.bottom, 12)
+            .padding(.top, 14).padding(.horizontal, 20).padding(.bottom, 10)
 
             GeometryReader { geo in
                 let agentColumnsWidth = CGFloat(viewModel.visibleAgents.count) * agentColumnWidth
@@ -135,21 +135,15 @@ struct SkillMatrixView: View {
             Color.clear
                 .frame(width: width, alignment: .leading)
             ForEach(viewModel.visibleAgents) { agent in
-                VStack(spacing: 3) {
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(agent.installed ? Color.green : Color.secondary.opacity(0.4))
+                        .frame(width: 5, height: 5)
                     Text(agent.name)
                         .font(.system(size: 11.5, weight: .semibold))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
-
-                    HStack(spacing: 3) {
-                        Circle()
-                            .fill(agent.installed ? Color.green : Color.secondary.opacity(0.4))
-                            .frame(width: 5, height: 5)
-                        Text(agent.installed ? "installed" : "not found")
-                            .font(.system(size: 9.5))
-                            .foregroundStyle(.secondary)
-                    }
                 }
                 .frame(width: agentColumnWidth, alignment: .center)
                 .overlay(alignment: .leading) {
@@ -159,7 +153,7 @@ struct SkillMatrixView: View {
                 }
             }
         }
-        .frame(height: 42)
+        .frame(height: 32)
         .background(Color(nsColor: .controlBackgroundColor).opacity(0.55))
         .overlay(alignment: .bottom) {
             Rectangle()
@@ -212,7 +206,7 @@ struct SkillMatrixView: View {
                 }
             }
         }
-        .frame(height: 36)
+        .frame(height: 32)
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(Color(nsColor: .separatorColor).opacity(0.5))
@@ -241,7 +235,7 @@ struct SkillMatrixView: View {
                     }
                 }
             }
-            .frame(height: 36)
+            .frame(height: 32)
             .overlay(alignment: .bottom) {
                 Rectangle()
                     .fill(Color(nsColor: .separatorColor).opacity(0.5))
@@ -273,7 +267,7 @@ struct SkillMatrixView: View {
                 }
             }
         }
-        .frame(height: 36)
+        .frame(height: 32)
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(Color(nsColor: .separatorColor).opacity(0.5))
@@ -298,7 +292,7 @@ struct SkillMatrixView: View {
             .font(.system(size: 11, weight: .semibold))
             .foregroundStyle(.secondary)
             .tracking(0.05)
-            .frame(width: width, height: 42, alignment: .leading)
+            .frame(width: width, height: 32, alignment: .leading)
             .padding(.horizontal, 20)
             .background(Color(nsColor: .controlBackgroundColor).opacity(0.55))
             .overlay(alignment: .bottom) {
@@ -331,7 +325,7 @@ struct SkillMatrixView: View {
                 }
                 .buttonStyle(.plain)
 
-                Image(systemName: "shippingbox").font(.system(size: 13)).foregroundStyle(Color.accentColor)
+                Image(systemName: "folder.fill").font(.system(size: 12)).foregroundStyle(Color.accentColor)
                 Text(source.label).font(.system(size: 13, weight: .semibold)).lineLimit(1).truncationMode(.tail)
 
                 Spacer(minLength: 0)
@@ -360,7 +354,7 @@ struct SkillMatrixView: View {
             .onHover { hovering in
                 hoveredSourceId = hovering ? source.id : nil
             }
-            .frame(height: 36)
+            .frame(height: 32)
             .overlay(alignment: .bottom) {
                 Rectangle()
                     .fill(Color(nsColor: .separatorColor).opacity(0.5))
@@ -402,7 +396,7 @@ struct SkillMatrixView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .frame(height: 36)
+            .frame(height: 32)
             .overlay(alignment: .bottom) {
                 Rectangle()
                     .fill(Color(nsColor: .separatorColor).opacity(0.5))
@@ -450,7 +444,7 @@ struct SkillMatrixView: View {
         .onHover { hovering in
             hoveredSkillId = hovering ? skill.id : nil
         }
-        .frame(height: 36)
+        .frame(height: 32)
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(Color(nsColor: .separatorColor).opacity(0.5))
@@ -504,43 +498,48 @@ private struct ProgressPill: View {
     let total: Int
     let onToggleAll: (Bool) -> Void
 
-    private var ratio: Double {
-        total > 0 ? Double(enabled) / Double(total) : 0
-    }
-
-    private var isFull: Bool { enabled == total }
+    private var isFull: Bool { enabled == total && total > 0 }
     private var isEmpty: Bool { enabled == 0 }
+    private var isMixed: Bool { !isFull && !isEmpty }
+
+    // Donut arc: circumference of r=5.5 circle = 2π×5.5 ≈ 34.56
+    private var strokeDashOffset: CGFloat {
+        total > 0 ? 34.56 * (1 - CGFloat(enabled) / CGFloat(total)) : 34.56
+    }
 
     var body: some View {
         Button {
             onToggleAll(!isFull)
         } label: {
-            HStack(spacing: 6) {
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(Color.accentColor.opacity(0.15))
-                            .frame(height: 5)
-                        Capsule()
-                            .fill(Color.accentColor)
-                            .frame(width: max(geo.size.width * ratio, ratio > 0 ? 5 : 0), height: 5)
-                    }
+            HStack(spacing: 5) {
+                ZStack {
+                    Circle()
+                        .stroke(lineWidth: 1.6)
+                        .opacity(0.35)
+                        .frame(width: 14, height: 14)
+                    Circle()
+                        .trim(from: 0, to: total > 0 ? CGFloat(enabled) / CGFloat(total) : 0)
+                        .stroke(style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                        .frame(width: 14, height: 14)
                 }
-                .frame(width: 28, height: 5)
+                .foregroundStyle(isFull ? Color.white : Color.accentColor)
 
                 Text("\(enabled)/\(total)")
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundStyle(isEmpty ? .secondary : (isFull ? Color.accentColor : .secondary))
+                    .font(.system(size: 11, weight: .medium))
                     .monospacedDigit()
+                    .foregroundStyle(isFull ? Color.white : (isEmpty ? Color.secondary : Color.accentColor))
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background {
                 Capsule()
                     .fill(isFull
-                          ? Color.accentColor.opacity(0.12)
-                          : Color.secondary.opacity(0.12))
-            )
+                          ? Color.accentColor
+                          : (isMixed
+                             ? Color.accentColor.opacity(0.12)
+                             : Color(nsColor: .quaternaryLabelColor).opacity(0.35)))
+            }
         }
         .buttonStyle(.plain)
         .help(isFull ? "Click to disable all" : "Click to enable all")

@@ -13,9 +13,6 @@ struct ContentView: View {
                 Spacer()
 
                 HStack(spacing: 10) {
-                    Text("SkillHub")
-                        .font(.system(size: 13, weight: .semibold))
-
                     HStack(spacing: 6) {
                         Image(systemName: "magnifyingglass")
                             .font(.system(size: 11))
@@ -44,7 +41,7 @@ struct ContentView: View {
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .frame(width: searchFocused ? 360 : 280)
+                    .frame(width: searchFocused ? 320 : 240)
                     .background(
                         RoundedRectangle(cornerRadius: 6)
                             .fill(Color(nsColor: .controlBackgroundColor))
@@ -86,7 +83,7 @@ struct ContentView: View {
                 }
                 .padding(.trailing, 14)
             }
-            .frame(height: 56)
+            .frame(height: 38)
             .background {
                 VisualEffectView(material: .menu, blendingMode: .withinWindow)
                     .ignoresSafeArea()

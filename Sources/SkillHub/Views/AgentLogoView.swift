@@ -51,28 +51,9 @@ struct VisibilityCheckbox: View {
     let onToggle: () -> Void
 
     var body: some View {
-        Button(action: onToggle) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 3)
-                    .strokeBorder(
-                        isChecked ? Color.accentColor : Color(nsColor: .separatorColor),
-                        lineWidth: 1
-                    )
-                    .background(
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(isChecked ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
-                    )
-                    .frame(width: 14, height: 14)
-
-                if isChecked {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(.white)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        .frame(width: 14, height: 14)
-        .animation(.easeInOut(duration: 0.1), value: isChecked)
+        Toggle(isOn: Binding(get: { isChecked }, set: { _ in onToggle() })) {}
+            .labelsHidden()
+            .toggleStyle(.checkbox)
+            .controlSize(.small)
     }
 }

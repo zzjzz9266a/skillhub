@@ -48,7 +48,7 @@ struct SidebarView: View {
                         }
                     }
                     .padding(.horizontal, 10)
-                    .frame(height: 28)
+                    .frame(height: 24)
                     .contentShape(Rectangle())
                     .help(agent.visible ? "Hide from matrix" : "Show in matrix")
                 }
@@ -93,7 +93,7 @@ struct SidebarView: View {
         let count = viewModel.searchFilteredAllSkills.count
         return sidebarButton(
             title: "All Skills",
-            systemImage: "tray.full",
+            systemImage: "square.grid.2x2",
             isSelected: viewModel.selectedSourceId == nil,
             count: count
         ) {
@@ -105,7 +105,7 @@ struct SidebarView: View {
         let count = viewModel.searchFilteredAllSkills.filter { $0.sourceId == source.id }.count
         return sidebarButton(
             title: source.label,
-            systemImage: "shippingbox",
+            systemImage: "folder",
             isSelected: viewModel.selectedSourceId == source.id,
             count: count
         ) {
@@ -132,9 +132,9 @@ struct SidebarView: View {
         Button(action: action) {
             HStack(spacing: 9) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 15))
-                    .frame(width: 18)
-                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                    .font(.system(size: 14))
+                    .frame(width: 16)
+                    .foregroundStyle(isSelected ? .white : .secondary)
                 Text(title)
                     .font(.system(size: 13))
                     .lineLimit(1)
@@ -143,18 +143,18 @@ struct SidebarView: View {
                 if let count = count, count > 0 {
                     Text("\(count)")
                         .font(.system(size: 11))
-                        .foregroundStyle(isSelected ? Color.accentColor.opacity(0.7) : Color(nsColor: .tertiaryLabelColor))
+                        .foregroundStyle(isSelected ? Color.white.opacity(0.75) : Color(nsColor: .tertiaryLabelColor))
                         .monospacedDigit()
                 }
             }
-            .foregroundStyle(isSelected ? Color.accentColor : .primary)
+            .foregroundStyle(isSelected ? Color.white : .primary)
             .padding(.horizontal, 10)
-            .frame(height: 30)
+            .frame(height: 24)
             .background {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(isSelected ? Color.accentColor.opacity(0.10) : Color.clear)
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(isSelected ? Color.accentColor : Color.clear)
             }
-            .contentShape(RoundedRectangle(cornerRadius: 6))
+            .contentShape(RoundedRectangle(cornerRadius: 5))
         }
         .buttonStyle(.plain)
     }
