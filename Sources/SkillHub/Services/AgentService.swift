@@ -17,7 +17,7 @@ final class AgentService {
         AgentDefinition(name: "Codex", configPaths: [".codex"], skillsSubdirectory: "skills", visibleByDefault: true),
         AgentDefinition(name: "OpenCode", configPaths: [".config/opencode"], skillsSubdirectory: "skills", visibleByDefault: true),
         AgentDefinition(name: "Gemini CLI", configPaths: [".gemini"], skillsSubdirectory: "skills", visibleByDefault: false),
-        AgentDefinition(name: "Copilot CLI", configPaths: [".config/github-copilot"], skillsSubdirectory: "skills", visibleByDefault: false),
+        AgentDefinition(name: "Trae CN", configPaths: [".trae-cn"], skillsSubdirectory: "skills", visibleByDefault: false),
         AgentDefinition(name: "OpenClaw", configPaths: [".openclaw"], skillsSubdirectory: "skills", visibleByDefault: false),
         AgentDefinition(name: "Hermes", configPaths: [".hermes"], skillsSubdirectory: "skills", visibleByDefault: false),
     ]

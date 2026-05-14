@@ -4,9 +4,18 @@ import Foundation
 final class SkillService {
     let database: DatabaseService
     let skillsStorePath: String
+    private let gitCloner: (String, String) throws -> Void
+    private let skillsCLIImporter: (String, String) throws -> Void
 
-    init(database: DatabaseService, skillsStorePath: String? = nil) {
+    init(
+        database: DatabaseService,
+        skillsStorePath: String? = nil,
+        gitCloner: @escaping (String, String) throws -> Void = SkillService.defaultGitCloner,
+        skillsCLIImporter: @escaping (String, String) throws -> Void = SkillService.defaultSkillsCLIImporter
+    ) {
         self.database = database
+        self.gitCloner = gitCloner
+        self.skillsCLIImporter = skillsCLIImporter
         if let path = skillsStorePath {
             self.skillsStorePath = path
         } else {
@@ -16,80 +25,14 @@ final class SkillService {
     }
 
     func install(from inputPath: String, sourceName: String, sourceLabel: String) throws -> Source {
-        let normalized = normalizeInput(inputPath)
-        let sourceType = SourceParser.parse(normalized)
-
-        // Resolve scan path first (clone if git) so failures don't leave stale DB records
-        let scanPath: String
-        var tempDir: String?
-        let rootSkillName: String?
-
-        switch sourceType {
-        case .git(let url):
-            let cloneDir = FileManager.default.temporaryDirectory
-                .appendingPathComponent("skillhub-clone-\(UUID().uuidString)").path
-            try cloneGit(url: url, to: cloneDir)
-            tempDir = cloneDir
-            scanPath = cloneDir
-            rootSkillName = sourceName
-        case .local(let path):
-            scanPath = path
-            rootSkillName = nil
-        case .npm:
-            throw SkillServiceError.unsupportedSource("npm packages are not yet supported")
-        case nil:
-            throw SkillServiceError.invalidSource("unable to determine source type for: \(normalized)")
-        }
-
-        defer {
-            if let dir = tempDir { try? FileManager.default.removeItem(atPath: dir) }
-        }
-
-        let discoveredSkills = findInternalSkills(at: scanPath, rootSkillName: rootSkillName)
-
-        // Prepare local store
-        let targetDir = (skillsStorePath as NSString)
-            .appendingPathComponent(sourceName)
-        try? FileManager.default.removeItem(atPath: targetDir)
-        try FileManager.default.createDirectory(atPath: targetDir, withIntermediateDirectories: true)
-
-        // Insert source + skills in DB
-        var source = Source(name: sourceName, label: sourceLabel, origin: normalized, installedAt: Date())
-        try database.dbQueue.write { db in
-            if let existing = try Source.filter(Source.Columns.name == sourceName).fetchOne(db) {
-                source.id = existing.id
-                try source.update(db)
-            } else {
-                try source.insert(db)
-            }
-            if source.id == 0 {
-                source = try Source.filter(Source.Columns.name == sourceName).fetchOne(db)!
-            }
-            try Skill.filter(Skill.Columns.sourceId == source.id).deleteAll(db)
-
-            for skill in discoveredSkills {
-                let destPath = (targetDir as NSString).appendingPathComponent(skill.name)
-                var record = Skill(
-                    name: skill.name,
-                    sourceId: source.id,
-                    installPath: destPath,
-                    description: skill.description,
-                    groups: skill.groups,
-                    version: nil,
-                    installedAt: Date(),
-                    updatedAt: Date()
-                )
-                try record.insert(db)
-            }
-        }
-
-        // Copy skill files to local store (after DB commit)
-        for skill in discoveredSkills {
-            let destPath = (targetDir as NSString).appendingPathComponent(skill.name)
-            try FileManager.default.copyItem(atPath: skill.path, toPath: destPath)
-        }
-
-        return source
+        let resolved = try resolveSource(from: inputPath, gitRootSkillName: sourceName)
+        defer { cleanupResolvedSource(resolved) }
+        return try confirmInstall(
+            resolved: resolved,
+            sourceName: sourceName,
+            sourceLabel: sourceLabel,
+            selectedSkills: resolved.skills
+        )
     }
 
     func confirmInstall(resolved: ResolvedSource, sourceName: String, sourceLabel: String, selectedSkills: [DiscoveredSkill]) throws -> Source {
@@ -133,8 +76,6 @@ final class SkillService {
         return source
     }
 
-    // MARK: - Git clone
-
     private func normalizeInput(_ input: String) -> String {
         let trimmed = input.trimmingCharacters(in: .whitespaces)
         // URLs: keep as-is — expandingTildeInPath mangles double slashes
@@ -150,7 +91,7 @@ final class SkillService {
         return (trimmed as NSString).expandingTildeInPath
     }
 
-    private func cloneGit(url: String, to path: String) throws {
+    static func defaultGitCloner(url: String, path: String) throws {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         task.arguments = ["git", "clone", "--depth", "1", url, path]
@@ -166,6 +107,27 @@ final class SkillService {
             let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
             let errorString = String(data: errorData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "unknown error"
             throw SkillServiceError.gitCloneFailed("git clone failed: \(errorString)")
+        }
+    }
+
+    static func defaultSkillsCLIImporter(source: String, workspace: String) throws {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        task.arguments = ["npx", "-y", "skills", "add", source, "-a", "claude-code", "--copy", "-y"]
+        task.currentDirectoryURL = URL(fileURLWithPath: workspace)
+
+        let outputPipe = Pipe()
+        task.standardOutput = outputPipe
+        task.standardError = outputPipe
+
+        try task.run()
+        task.waitUntilExit()
+
+        guard task.terminationStatus == 0 else {
+            let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
+            let output = String(data: outputData, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? "unknown error"
+            throw SkillServiceError.skillImportFailed("npx skills import failed: \(output)")
         }
     }
 
@@ -213,35 +175,9 @@ final class SkillService {
             throw SkillServiceError.invalidSource("cannot determine source type for update")
         }
 
-        let normalized = source.origin
-        let sourceType = SourceParser.parse(normalized)
-
-        let scanPath: String
-        var tempDir: String?
-        let rootSkillName: String?
-
-        switch sourceType {
-        case .git(let url):
-            let cloneDir = FileManager.default.temporaryDirectory
-                .appendingPathComponent("skillhub-update-\(UUID().uuidString)").path
-            try cloneGit(url: url, to: cloneDir)
-            tempDir = cloneDir
-            scanPath = cloneDir
-            rootSkillName = source.name
-        case .local(let path):
-            scanPath = path
-            rootSkillName = nil
-        case .npm:
-            throw SkillServiceError.unsupportedSource("npm packages are not yet supported")
-        case nil:
-            throw SkillServiceError.invalidSource("unable to determine source type for: \(normalized)")
-        }
-
-        defer {
-            if let dir = tempDir { try? FileManager.default.removeItem(atPath: dir) }
-        }
-
-        let discoveredSkills = findInternalSkills(at: scanPath, rootSkillName: rootSkillName)
+        let resolved = try resolveSource(from: source.origin, gitRootSkillName: source.name)
+        defer { cleanupResolvedSource(resolved) }
+        let discoveredSkills = resolved.skills
 
         let targetDir = (skillsStorePath as NSString)
             .appendingPathComponent(source.name)
@@ -324,32 +260,7 @@ final class SkillService {
     }
 
     func preview(from inputPath: String) throws -> ResolvedSource {
-        let normalized = normalizeInput(inputPath)
-        let sourceType = SourceParser.parse(normalized)
-
-        let scanPath: String
-        var tempDir: String?
-        let rootSkillName: String?
-
-        switch sourceType {
-        case .git(let url):
-            let cloneDir = FileManager.default.temporaryDirectory
-                .appendingPathComponent("skillhub-clone-\(UUID().uuidString)").path
-            try cloneGit(url: url, to: cloneDir)
-            tempDir = cloneDir
-            scanPath = cloneDir
-            rootSkillName = suggestedSourceName(from: normalized)
-        case .local(let path):
-            scanPath = path
-            rootSkillName = nil
-        case .npm:
-            throw SkillServiceError.unsupportedSource("npm packages are not yet supported")
-        case nil:
-            throw SkillServiceError.invalidSource("unable to determine source type for: \(normalized)")
-        }
-
-        let skills = findSkills(at: scanPath, rootSkillName: rootSkillName)
-        return ResolvedSource(scanPath: scanPath, originalInput: normalized, skills: skills, tempDir: tempDir)
+        try resolveSource(from: inputPath)
     }
 
     // MARK: - Private
@@ -361,41 +272,209 @@ final class SkillService {
         let description: String?
     }
 
+    private let skillCollectionDirectoryNames: Set<String> = ["skills"]
+    private let readmeCandidates: [String] = ["README.md", "readme.md"]
+    private let installerSkillsRelativePath = ".claude/skills"
+
+    private func resolveSource(from inputPath: String, gitRootSkillName: String? = nil) throws -> ResolvedSource {
+        let normalized = normalizeInput(inputPath)
+        let sourceType = SourceParser.parse(normalized)
+
+        switch sourceType {
+        case .git(let url):
+            let tempDir = try createTemporaryDirectory(prefix: "skillhub-source")
+            let cloneDir = (tempDir as NSString).appendingPathComponent("repo")
+            try gitCloner(url, cloneDir)
+
+            let rootSkillName = gitRootSkillName ?? suggestedSourceName(from: normalized)
+            let skills = resolveGitRepositorySkills(
+                repositoryPath: cloneDir,
+                originalInput: normalized,
+                rootSkillName: rootSkillName,
+                tempDir: tempDir
+            )
+            return ResolvedSource(scanPath: cloneDir, originalInput: normalized, skills: skills, tempDir: tempDir)
+        case .local(let path):
+            let skills = findSkills(at: path)
+            return ResolvedSource(scanPath: path, originalInput: normalized, skills: skills, tempDir: nil)
+        case .npm:
+            throw SkillServiceError.unsupportedSource("npm packages are not yet supported")
+        case nil:
+            throw SkillServiceError.invalidSource("unable to determine source type for: \(normalized)")
+        }
+    }
+
+    private func resolveGitRepositorySkills(
+        repositoryPath: String,
+        originalInput: String,
+        rootSkillName: String,
+        tempDir: String
+    ) -> [DiscoveredSkill] {
+        guard repositoryAdvertisesSkillsInstaller(at: repositoryPath) else {
+            return findSkills(at: repositoryPath, rootSkillName: rootSkillName)
+        }
+
+        let installerWorkspace = (tempDir as NSString).appendingPathComponent("installer")
+        do {
+            try FileManager.default.createDirectory(atPath: installerWorkspace, withIntermediateDirectories: true)
+            try skillsCLIImporter(originalInput, installerWorkspace)
+            return try discoverImportedSkills(
+                installerWorkspace: installerWorkspace,
+                repositoryPath: repositoryPath
+            )
+        } catch {
+            return findSkills(at: repositoryPath, rootSkillName: rootSkillName)
+        }
+    }
+
     private func findSkills(at path: String, rootSkillName: String? = nil) -> [DiscoveredSkill] {
         return findInternalSkills(at: path, rootSkillName: rootSkillName).map { DiscoveredSkill(name: $0.name, groups: $0.groups, description: $0.description, path: $0.path) }
     }
 
-    private func findInternalSkills(at path: String, depth: Int = 0, rootSkillName: String? = nil) -> [InternalSkill] {
-        var result: [InternalSkill] = []
-        guard let entries = try? FileManager.default.contentsOfDirectory(atPath: path) else {
-            if hasSkillMD(at: path) {
-                let name = rootSkillName ?? (path as NSString).lastPathComponent
-                let meta = parseMetadata(from: path)
-                result.append(InternalSkill(name: name, path: path, groups: meta.groups, description: meta.description))
-            }
-            return result
+    private func findInternalSkills(at path: String, rootSkillName: String? = nil) -> [InternalSkill] {
+        if hasSkillMD(at: path) {
+            return [buildInternalSkill(at: path, name: rootSkillName ?? (path as NSString).lastPathComponent)]
         }
 
-        // Skip hidden dirs at depth 0 to avoid scanning .git etc.
-        for entry in entries where !entriesToSkip(entry, at: depth) {
+        let childDirectories = subdirectories(at: path)
+        guard !childDirectories.isEmpty else {
+            return []
+        }
+
+        var discovered = childDirectories.compactMap { entry -> InternalSkill? in
             let fullPath = (path as NSString).appendingPathComponent(entry)
-            var isDir: ObjCBool = false
-            guard FileManager.default.fileExists(atPath: fullPath, isDirectory: &isDir),
-                  isDir.boolValue else { continue }
+            guard hasSkillMD(at: fullPath) else { return nil }
+            return buildInternalSkill(at: fullPath, name: entry)
+        }
+
+        let supportsStableCollectionLayout = repositoryAdvertisesSkillsInstaller(at: path)
+
+        for entry in childDirectories where skillCollectionDirectoryNames.contains(entry) && supportsStableCollectionLayout {
+            let fullPath = (path as NSString).appendingPathComponent(entry)
+            discovered.append(contentsOf: findSkillsInCollectionDirectory(at: fullPath))
+        }
+
+        var seenPaths: Set<String> = []
+        return discovered
+            .filter { seenPaths.insert($0.path).inserted }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    private func findSkillsInCollectionDirectory(at path: String) -> [InternalSkill] {
+        let childDirectories = subdirectories(at: path)
+        var discovered: [InternalSkill] = []
+
+        for entry in childDirectories {
+            let fullPath = (path as NSString).appendingPathComponent(entry)
             if hasSkillMD(at: fullPath) {
-                let meta = parseMetadata(from: fullPath)
-                result.append(InternalSkill(name: entry, path: fullPath, groups: meta.groups, description: meta.description))
-            } else if depth < 2 {
-                result.append(contentsOf: findInternalSkills(at: fullPath, depth: depth + 1))
+                discovered.append(buildInternalSkill(at: fullPath, name: entry))
+                continue
+            }
+
+            for nestedEntry in subdirectories(at: fullPath) {
+                let nestedPath = (fullPath as NSString).appendingPathComponent(nestedEntry)
+                guard hasSkillMD(at: nestedPath) else { continue }
+                discovered.append(buildInternalSkill(at: nestedPath, name: nestedEntry, defaultGroups: [entry]))
             }
         }
-        // If no subdirectories were found as skills, check if this path itself is a skill
-        if result.isEmpty && hasSkillMD(at: path) {
-            let name = rootSkillName ?? (path as NSString).lastPathComponent
-            let meta = parseMetadata(from: path)
-            result.append(InternalSkill(name: name, path: path, groups: meta.groups, description: meta.description))
+
+        return discovered
+    }
+
+    private func buildInternalSkill(at path: String, name: String, defaultGroups: [String] = []) -> InternalSkill {
+        let meta = parseMetadata(from: path)
+        let groups = meta.groups.isEmpty ? defaultGroups : meta.groups
+        return InternalSkill(name: name, path: path, groups: groups, description: meta.description)
+    }
+
+    private func discoverImportedSkills(
+        installerWorkspace: String,
+        repositoryPath: String
+    ) throws -> [DiscoveredSkill] {
+        let installedSkillsPath = (installerWorkspace as NSString).appendingPathComponent(installerSkillsRelativePath)
+        let inferredGroups = inferredGroupsBySkillName(from: repositoryPath)
+        let discovered = subdirectories(at: installedSkillsPath)
+            .compactMap { entry -> DiscoveredSkill? in
+                let fullPath = (installedSkillsPath as NSString).appendingPathComponent(entry)
+                guard hasSkillMD(at: fullPath) else { return nil }
+                let skill = buildInternalSkill(at: fullPath, name: entry, defaultGroups: inferredGroups[entry] ?? [])
+                return DiscoveredSkill(
+                    name: skill.name,
+                    groups: skill.groups,
+                    description: skill.description,
+                    path: skill.path
+                )
+            }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+
+        guard !discovered.isEmpty else {
+            throw SkillServiceError.skillImportFailed("npx skills import did not produce any installed skills")
         }
-        return result
+
+        return discovered
+    }
+
+    private func inferredGroupsBySkillName(from repositoryPath: String) -> [String: [String]] {
+        var groupsBySkillName: [String: Set<String>] = [:]
+
+        for entry in subdirectories(at: repositoryPath) where skillCollectionDirectoryNames.contains(entry) {
+            let collectionPath = (repositoryPath as NSString).appendingPathComponent(entry)
+            for skill in findSkillsInCollectionDirectory(at: collectionPath) {
+                let existing = groupsBySkillName[skill.name] ?? []
+                groupsBySkillName[skill.name] = existing.union(skill.groups)
+            }
+        }
+
+        return groupsBySkillName.mapValues { groups in
+            groups.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        }
+    }
+
+    private func subdirectories(at path: String) -> [String] {
+        guard let entries = try? FileManager.default.contentsOfDirectory(atPath: path) else {
+            return []
+        }
+
+        return entries
+            .filter { !$0.hasPrefix(".") }
+            .filter { entry in
+                let fullPath = (path as NSString).appendingPathComponent(entry)
+                var isDir: ObjCBool = false
+                return FileManager.default.fileExists(atPath: fullPath, isDirectory: &isDir) && isDir.boolValue
+            }
+    }
+
+    private func repositoryAdvertisesSkillsInstaller(at path: String) -> Bool {
+        for candidate in readmeCandidates {
+            let readmePath = (path as NSString).appendingPathComponent(candidate)
+            guard FileManager.default.fileExists(atPath: readmePath),
+                  let content = try? String(contentsOfFile: readmePath, encoding: .utf8) else {
+                continue
+            }
+            if content.localizedCaseInsensitiveContains("skills.sh") {
+                return true
+            }
+            if content.range(
+                of: #"(?i)\bnpx(?:\s+-\S+)*\s+skills(?:@[A-Za-z0-9._-]+)?\b"#,
+                options: .regularExpression
+            ) != nil {
+                return true
+            }
+        }
+        return false
+    }
+
+    private func createTemporaryDirectory(prefix: String) throws -> String {
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(prefix)-\(UUID().uuidString)").path
+        try FileManager.default.createDirectory(atPath: path, withIntermediateDirectories: true)
+        return path
+    }
+
+    private func cleanupResolvedSource(_ resolved: ResolvedSource) {
+        if let dir = resolved.tempDir {
+            try? FileManager.default.removeItem(atPath: dir)
+        }
     }
 
     private func suggestedSourceName(from input: String) -> String {
@@ -405,13 +484,6 @@ final class SkillService {
             : trimmed
         return (path as NSString).lastPathComponent
             .replacingOccurrences(of: ".git", with: "")
-    }
-
-    private func entriesToSkip(_ name: String, at depth: Int) -> Bool {
-        if name.hasPrefix(".") { return true }
-        if depth > 0 { return false }
-        let skip = ["node_modules", "packages", "scripts", "screenshots", "docs", "tests", "__pycache__"]
-        return skip.contains(name)
     }
 
     private func hasSkillMD(at path: String) -> Bool {
@@ -516,12 +588,14 @@ final class SkillService {
 
 enum SkillServiceError: LocalizedError {
     case gitCloneFailed(String)
+    case skillImportFailed(String)
     case unsupportedSource(String)
     case invalidSource(String)
 
     var errorDescription: String? {
         switch self {
         case .gitCloneFailed(let msg): return msg
+        case .skillImportFailed(let msg): return msg
         case .unsupportedSource(let msg): return msg
         case .invalidSource(let msg): return msg
         }

@@ -62,34 +62,52 @@ struct FooterStatusBar: View {
 
     @ViewBuilder
     private var syncIndicator: some View {
-        switch viewModel.syncStatus {
-        case .idle:
-            EmptyView()
-        case .syncing:
+        if viewModel.isResolving || viewModel.isInstalling {
             HStack(spacing: 4) {
-                ProgressView().scaleEffect(0.6).frame(width: 12, height: 12)
-                Text("Syncing…")
+                ProgressView()
+                    .scaleEffect(0.6)
+                    .frame(width: 12, height: 12)
+                Text(viewModel.isResolving ? "Loading source..." : "Installing skills...")
             }
-        case .ok(let date):
-            HStack(spacing: 12) {
-                HStack(spacing: 4) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                        .font(.system(size: 10))
-                    Text("All in sync")
-                        .foregroundStyle(Color(red: 0.18, green: 0.82, blue: 0.34))
-                }
-                divider
-                Text("Last update \(relativeTime(date))")
-            }
-        case .error(let msg):
+        } else if viewModel.statusText.hasPrefix("Resolve failed") || viewModel.statusText.hasPrefix("Install failed") {
             HStack(spacing: 4) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
                     .font(.system(size: 10))
-                Text(msg)
+                Text(viewModel.statusText)
                     .lineLimit(1)
                     .foregroundStyle(.orange)
+            }
+        } else {
+            switch viewModel.syncStatus {
+            case .idle:
+                EmptyView()
+            case .syncing:
+                HStack(spacing: 4) {
+                    ProgressView().scaleEffect(0.6).frame(width: 12, height: 12)
+                    Text("Syncing…")
+                }
+            case .ok(let date):
+                HStack(spacing: 12) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                            .font(.system(size: 10))
+                        Text("All in sync")
+                            .foregroundStyle(Color(red: 0.18, green: 0.82, blue: 0.34))
+                    }
+                    divider
+                    Text("Last update \(relativeTime(date))")
+                }
+            case .error(let msg):
+                HStack(spacing: 4) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                        .font(.system(size: 10))
+                    Text(msg)
+                        .lineLimit(1)
+                        .foregroundStyle(.orange)
+                }
             }
         }
     }

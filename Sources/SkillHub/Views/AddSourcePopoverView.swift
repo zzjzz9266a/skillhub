@@ -22,17 +22,25 @@ struct AddSourcePopoverView: View {
                     .font(.system(size: 12))
                     .focused($inputFocused)
                     .onSubmit { install() }
+                    .disabled(viewModel.isResolving)
 
                 Button("Browse…") { browseLocalSkill() }
                     .font(.system(size: 12))
+                    .disabled(viewModel.isResolving)
             }
 
             HStack {
-                if viewModel.isResolving {
-                    ProgressView().scaleEffect(0.7).frame(width: 16, height: 16)
-                    Text("Resolving…")
+                if viewModel.isResolving || viewModel.statusText.hasPrefix("Resolve failed") {
+                    if viewModel.isResolving {
+                        ProgressView()
+                            .scaleEffect(0.65)
+                            .frame(width: 14, height: 14)
+                    }
+                    Text(viewModel.isResolving ? "Loading source..." : viewModel.statusText)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(viewModel.statusText.hasPrefix("Resolve failed") ? .orange : .secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                 }
                 Spacer()
                 Button("Cancel") {
@@ -40,9 +48,21 @@ struct AddSourcePopoverView: View {
                     viewModel.showAddSourcePopover = false
                 }
                 .keyboardShortcut(.cancelAction)
+                .disabled(viewModel.isResolving)
 
-                Button("Install") {
+                Button {
                     install()
+                } label: {
+                    if viewModel.isResolving {
+                        HStack(spacing: 6) {
+                            ProgressView()
+                                .scaleEffect(0.6)
+                                .frame(width: 12, height: 12)
+                            Text("Loading")
+                        }
+                    } else {
+                        Text("Install")
+                    }
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(viewModel.installInput.trimmingCharacters(in: .whitespaces).isEmpty
@@ -58,7 +78,6 @@ struct AddSourcePopoverView: View {
 
     private func install() {
         viewModel.install()
-        viewModel.showAddSourcePopover = false
     }
 
     private func browseLocalSkill() {

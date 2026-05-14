@@ -32,6 +32,22 @@ final class AgentServiceTests: XCTestCase {
         XCTAssertTrue(hasClaude, "Should detect Claude Code by ~/.claude/ config directory")
     }
 
+    func testDetectTraeCNByConfigPath() {
+        let tmpHome = FileManager.default.temporaryDirectory
+            .appendingPathComponent("test-trae-\(UUID().uuidString)")
+        try! FileManager.default.createDirectory(atPath: tmpHome.path, withIntermediateDirectories: true)
+        let traeDir = tmpHome.appendingPathComponent(".trae-cn")
+        try! FileManager.default.createDirectory(atPath: traeDir.path, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(atPath: tmpHome.path) }
+
+        let service = AgentService(database: db, homeOverride: tmpHome.path)
+        let agents = service.detect()
+
+        let trae = agents.first { $0.name == "Trae CN" }
+        XCTAssertEqual(trae?.installed, true, "Should detect Trae CN by ~/.trae-cn/ config directory")
+        XCTAssertEqual(trae?.configPath, traeDir.path)
+    }
+
     func testDetectAgentsEmptyHome() {
         let tmpHome = FileManager.default.temporaryDirectory
             .appendingPathComponent("test-empty-\(UUID().uuidString)")

@@ -70,6 +70,20 @@ struct PreviewInstallView: View {
                 .frame(minHeight: 120, maxHeight: 300)
             }
 
+            if viewModel.statusText.hasPrefix("Install failed") {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                    Text(viewModel.statusText)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                }
+                .padding(10)
+                .background(Color.orange.opacity(0.1))
+                .cornerRadius(6)
+            }
+
             Spacer()
 
             // Actions
@@ -78,13 +92,27 @@ struct PreviewInstallView: View {
                     viewModel.cancelPreview()
                 }
                 .keyboardShortcut(.escape)
+                .disabled(viewModel.isInstalling)
 
                 Spacer()
 
-                Button(viewModel.previewIsReinstall ? "Reinstall" : "Install") {
-                    viewModel.confirmInstall()
+                if viewModel.isInstalling {
+                    HStack(spacing: 6) {
+                        ProgressView()
+                            .scaleEffect(0.65)
+                            .frame(width: 14, height: 14)
+                        Text("Installing...")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
-                .disabled(viewModel.previewSkills.isEmpty)
+
+                Button {
+                    viewModel.confirmInstall()
+                } label: {
+                    Text(viewModel.previewIsReinstall ? "Reinstall" : "Install")
+                }
+                .disabled(viewModel.previewSkills.isEmpty || viewModel.isInstalling)
                 .keyboardShortcut(.return)
             }
         }

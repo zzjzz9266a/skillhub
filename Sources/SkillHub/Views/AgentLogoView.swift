@@ -21,7 +21,7 @@ struct AgentLogoView: View {
         case "Codex":         return Color(red: 0.05, green: 0.05, blue: 0.05)
         case "OpenCode":      return Color(red: 0.10, green: 0.09, blue: 0.09)
         case "Gemini CLI":    return Color(red: 0.10, green: 0.45, blue: 0.91)
-        case "Copilot CLI":   return Color(red: 0.14, green: 0.16, blue: 0.18)
+        case "Trae CN":       return Color(red: 0.08, green: 0.63, blue: 0.59)
         case "OpenClaw":      return Color(red: 0.37, green: 0.29, blue: 0.55)
         case "Hermes":        return Color(red: 0.77, green: 0.36, blue: 0.10)
         default:              return Color.secondary.opacity(0.3)
@@ -34,7 +34,7 @@ struct AgentLogoView: View {
         case "Codex":         return "circle.hexagongrid"
         case "OpenCode":      return "terminal"
         case "Gemini CLI":    return "sparkle"
-        case "Copilot CLI":   return "airplane.circle"
+        case "Trae CN":       return "t.circle"
         case "OpenClaw":      return "pawprint"
         case "Hermes":        return "envelope.wings"
         default:              return "questionmark"

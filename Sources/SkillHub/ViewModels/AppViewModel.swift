@@ -11,6 +11,7 @@ final class AppViewModel: ObservableObject {
     @Published var installInput: String = ""
     @Published var statusText: String = ""
     @Published var isResolving: Bool = false
+    @Published var isInstalling: Bool = false
     @Published var showPreview: Bool = false
     @Published var previewSkills: [SkillService.DiscoveredSkill] = []
     @Published var previewIsReinstall: Bool = false
@@ -201,8 +202,9 @@ final class AppViewModel: ObservableObject {
 
     func install() {
         guard !installInput.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        guard !isResolving && !isInstalling else { return }
         isResolving = true
-        statusText = "Resolving..."
+        statusText = "Loading source..."
         let input = installInput.trimmingCharacters(in: .whitespaces)
 
         let sourceName = (input as NSString).lastPathComponent
@@ -221,6 +223,7 @@ final class AppViewModel: ObservableObject {
                     self.previewSkills = resolved.skills
                     self.previewResolvedSource = resolved
                     self.previewIsReinstall = isReinstall || self.sources.contains { $0.name == sourceName || $0.origin == resolved.originalInput }
+                    self.showAddSourcePopover = false
                     self.showPreview = true
                     self.statusText = resolved.skills.isEmpty
                         ? "No SKILL.md files found in \"\(sourceName)\""
@@ -237,8 +240,9 @@ final class AppViewModel: ObservableObject {
 
     func confirmInstall() {
         guard let resolved = previewResolvedSource else { return }
+        guard !isInstalling else { return }
+        isInstalling = true
         statusText = "Installing..."
-        showPreview = false
 
         let sourceName = previewSourceName
         let sourceLabel = previewSourceLabel
@@ -265,6 +269,8 @@ final class AppViewModel: ObservableObject {
                     try? FileManager.default.removeItem(atPath: dir)
                 }
                 DispatchQueue.main.async {
+                    self.isInstalling = false
+                    self.showPreview = false
                     self.installInput = ""
                     self.previewResolvedSource = nil
                     self.previewSkills = []
@@ -275,6 +281,7 @@ final class AppViewModel: ObservableObject {
                     try? FileManager.default.removeItem(atPath: dir)
                 }
                 DispatchQueue.main.async {
+                    self.isInstalling = false
                     self.statusText = "Install failed: \(error.localizedDescription)"
                 }
             }
@@ -282,10 +289,12 @@ final class AppViewModel: ObservableObject {
     }
 
     func cancelPreview() {
+        guard !isInstalling else { return }
         if let dir = previewResolvedSource?.tempDir {
             try? FileManager.default.removeItem(atPath: dir)
         }
         isResolving = false
+        isInstalling = false
         showPreview = false
         previewSkills = []
         previewResolvedSource = nil

@@ -33,8 +33,8 @@ SkillHub gives you a single window to see and control all of it.
 | Claude Code | `~/.claude/` |
 | Gemini CLI | `~/.gemini/` |
 | Codex | `~/.codex/` |
-| OpenCode | `~/.opencode/` |
-| Copilot CLI | `~/.github-copilot/` |
+| OpenCode | `~/.config/opencode/` |
+| Trae CN | `~/.trae-cn/` |
 | OpenClaw | `~/.openclaw/` |
 | Hermes | `~/.hermes/` |
 

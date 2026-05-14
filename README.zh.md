@@ -33,8 +33,8 @@ SkillHub 用一个窗口把这些全部理清楚。
 | Claude Code | `~/.claude/` |
 | Gemini CLI | `~/.gemini/` |
 | Codex | `~/.codex/` |
-| OpenCode | `~/.opencode/` |
-| Copilot CLI | `~/.github-copilot/` |
+| OpenCode | `~/.config/opencode/` |
+| Trae CN | `~/.trae-cn/` |
 | OpenClaw | `~/.openclaw/` |
 | Hermes | `~/.hermes/` |
 
