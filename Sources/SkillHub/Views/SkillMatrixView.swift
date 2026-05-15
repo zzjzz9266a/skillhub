@@ -6,9 +6,20 @@ struct SkillMatrixView: View {
     @State private var popoverSkillId: Int64? = nil
     @State private var hoveredSourceId: Int64? = nil
     @State private var hoveredSkillId: Int64? = nil
-    @State private var skillColumnWidth: CGFloat = 200
+    @State private var skillColumnWidth: CGFloat? = nil
+    @State private var skillColumnResizeStartWidth: CGFloat? = nil
+    @State private var isHoveringSkillColumnResize: Bool = false
+    @State private var isResizingSkillColumn: Bool = false
+    @State private var isSkillColumnResizeCursorActive: Bool = false
 
     private let agentColumnWidth: CGFloat = 116
+    private let minimumSkillColumnWidth: CGFloat = 180
+    private let maximumSkillColumnWidth: CGFloat = 900
+    private let skillColumnResizeHandleWidth: CGFloat = 8
+    private let skillColumnHorizontalPadding: CGFloat = 12
+    private let hierarchyIndent: CGFloat = 16
+    private let directSkillLeafReserve: CGFloat = 48
+    private let groupedSkillLeafReserve: CGFloat = 19
 
     var body: some View {
         if viewModel.visibleAgents.isEmpty {
@@ -55,16 +66,19 @@ struct SkillMatrixView: View {
             GeometryReader { geo in
                 let agentColumnsWidth = CGFloat(viewModel.visibleAgents.count) * agentColumnWidth
                 let minSkillWidth = computeSkillColumnWidth(tree: tree)
-                // 首列填满剩余空间；仅当内容超出时才横向滚动
-                let needsHScroll = minSkillWidth + agentColumnsWidth > geo.size.width
-                let treeWidth = needsHScroll
-                    ? minSkillWidth
-                    : geo.size.width - agentColumnsWidth
+                let autoSkillWidth = automaticSkillColumnWidth(
+                    minSkillWidth: minSkillWidth,
+                    availableWidth: geo.size.width,
+                    agentColumnsWidth: agentColumnsWidth
+                )
+                let treeWidth = resolvedSkillColumnWidth(autoWidth: autoSkillWidth)
+                let needsHScroll = treeWidth + agentColumnsWidth > geo.size.width
+                let usesHScroll = needsHScroll || isResizingSkillColumn
 
                 ScrollView(.vertical, showsIndicators: true) {
                     ZStack(alignment: .topLeading) {
-                        if needsHScroll {
-                            ScrollView(.horizontal, showsIndicators: true) {
+                        if usesHScroll {
+                            ScrollView(.horizontal, showsIndicators: needsHScroll) {
                                 fullWidthContent(tree: tree, width: treeWidth)
                             }
                         } else {
@@ -75,6 +89,9 @@ struct SkillMatrixView: View {
                             .frame(width: treeWidth)
                             .frame(maxHeight: .infinity, alignment: .top)
                         frozenSkillColumn(tree: tree, width: treeWidth)
+                            .overlay(alignment: .trailing) {
+                                skillColumnResizeHandle(currentWidth: treeWidth)
+                            }
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -85,6 +102,75 @@ struct SkillMatrixView: View {
             }
             .padding(.horizontal, 24).padding(.bottom, 18)
         }
+    }
+
+    // MARK: - Column resizing
+
+    private func skillColumnResizeHandle(currentWidth: CGFloat) -> some View {
+        Rectangle()
+            .fill(Color.clear)
+            .frame(width: skillColumnResizeHandleWidth)
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .overlay(alignment: .trailing) {
+                Rectangle()
+                    .fill(Color(nsColor: .separatorColor).opacity(isResizingSkillColumn ? 0.85 : 0.5))
+                    .frame(width: 1)
+            }
+            .onHover { hovering in
+                isHoveringSkillColumnResize = hovering
+                setSkillColumnResizeCursor(hovering || isResizingSkillColumn)
+            }
+            .gesture(
+                DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                    .onChanged { value in
+                        if skillColumnResizeStartWidth == nil {
+                            skillColumnResizeStartWidth = currentWidth
+                        }
+                        isResizingSkillColumn = true
+                        setSkillColumnResizeCursor(true)
+                        let startWidth = skillColumnResizeStartWidth ?? currentWidth
+                        skillColumnWidth = clampedSkillColumnWidth(startWidth + value.translation.width)
+                    }
+                    .onEnded { _ in
+                        skillColumnResizeStartWidth = nil
+                        isResizingSkillColumn = false
+                        setSkillColumnResizeCursor(isHoveringSkillColumnResize)
+                    }
+            )
+            .onTapGesture(count: 2) {
+                skillColumnWidth = nil
+            }
+            .onDisappear {
+                setSkillColumnResizeCursor(false)
+            }
+            .help("Drag to resize the skill column. Double-click to reset.")
+    }
+
+    private func setSkillColumnResizeCursor(_ active: Bool) {
+        guard active != isSkillColumnResizeCursorActive else { return }
+        if active {
+            NSCursor.resizeLeftRight.push()
+        } else {
+            NSCursor.pop()
+        }
+        isSkillColumnResizeCursorActive = active
+    }
+
+    private func automaticSkillColumnWidth(minSkillWidth: CGFloat, availableWidth: CGFloat, agentColumnsWidth: CGFloat) -> CGFloat {
+        if minSkillWidth + agentColumnsWidth > availableWidth {
+            return minSkillWidth
+        }
+        return availableWidth - agentColumnsWidth
+    }
+
+    private func resolvedSkillColumnWidth(autoWidth: CGFloat) -> CGFloat {
+        guard let skillColumnWidth else { return autoWidth }
+        return clampedSkillColumnWidth(skillColumnWidth)
+    }
+
+    private func clampedSkillColumnWidth(_ width: CGFloat) -> CGFloat {
+        min(max(width, minimumSkillColumnWidth), maximumSkillColumnWidth)
     }
 
     // MARK: - Skill column width calculation
@@ -98,26 +184,32 @@ struct SkillMatrixView: View {
         let headerW = ceil(("SKILL" as NSString).size(withAttributes: [.font: headerFont]).width) + 40 // 20px padding each side
 
         for item in tree {
-            // Source row: 12px padding + chevron(16) + gap(4) + icon(13) + gap(4) + text + meta(24) + action(18) + trailing(4)
-            let sourceW = 12 + 16 + 4 + 13 + 4 + ceil((item.source.label as NSString).size(withAttributes: [.font: boldFont]).width) + 24 + 18 + 4
+            let showsOnlyUngroupedSkills = item.groups.count == 1 && item.groups.first?.name == "ungrouped"
+
+            // Source row: leading padding + chevron + icon + text + action reserve + trailing padding
+            let sourceW = leadingPadding(forLevel: 0) + 16 + 4 + 13 + 4 + ceil((item.source.label as NSString).size(withAttributes: [.font: boldFont]).width) + 24 + 18 + skillColumnHorizontalPadding
             maxWidth = max(maxWidth, sourceW)
 
             for group in item.groups {
-                // Group row: 12px padding + chevron(16) + gap(4) + folder(13) + gap(4) + text + "(n)" + trailing(4)
-                let groupNameW = ceil((displayName(for: group.name) as NSString).size(withAttributes: [.font: font]).width)
-                let countW = ceil(("(\(group.skills.count))" as NSString).size(withAttributes: [.font: font]).width)
-                let groupW = 12 + 16 + 4 + 13 + 4 + groupNameW + 4 + countW + 4
-                maxWidth = max(maxWidth, groupW)
+                if !showsOnlyUngroupedSkills {
+                    // Group row: one hierarchy level deeper than source.
+                    let groupNameW = ceil((displayName(for: group.name) as NSString).size(withAttributes: [.font: font]).width)
+                    let countW = ceil(("(\(group.skills.count))" as NSString).size(withAttributes: [.font: font]).width)
+                    let groupW = leadingPadding(forLevel: 1) + 16 + 4 + 13 + 4 + groupNameW + 4 + countW + skillColumnHorizontalPadding
+                    maxWidth = max(maxWidth, groupW)
+                }
 
                 for skill in group.skills {
                     let skillName = displayName(for: skill, sourceLabel: item.source.label)
-                    // Skill row: 12px padding + spacer(31) + spacer(13) + gap(4) + text + info(18) + trailing(4)
-                    let skillW = 12 + 31 + 13 + 4 + ceil((skillName as NSString).size(withAttributes: [.font: font]).width) + 18 + 4
+                    // Skill rows reserve less empty space under folders so the child indent stays compact.
+                    let skillLevel = showsOnlyUngroupedSkills ? 0 : 1
+                    let leafReserve = showsOnlyUngroupedSkills ? directSkillLeafReserve : groupedSkillLeafReserve
+                    let skillW = leadingPadding(forLevel: skillLevel) + leafReserve + 4 + ceil((skillName as NSString).size(withAttributes: [.font: font]).width) + 18 + skillColumnHorizontalPadding
                     maxWidth = max(maxWidth, skillW)
                 }
             }
         }
-        return max(maxWidth, headerW, 180)
+        return max(maxWidth, headerW, minimumSkillColumnWidth)
     }
 
     // MARK: - Full-width matrix content
@@ -347,7 +439,8 @@ struct SkillMatrixView: View {
                         .frame(width: 16, height: 16)
                 }
             }
-            .padding(.horizontal, 12)
+            .padding(.leading, leadingPadding(forLevel: 0))
+            .padding(.trailing, skillColumnHorizontalPadding)
             .frame(width: width, alignment: .leading)
             .contentShape(Rectangle())
             .onTapGesture { viewModel.toggleSourceExpanded(sourceId: source.id) }
@@ -364,7 +457,7 @@ struct SkillMatrixView: View {
             if isExpanded {
                 if groups.count == 1 && groups.first?.name == "ungrouped" {
                     ForEach(groups.first!.skills) { skill in
-                        frozenSkillName(skill: skill, sourceLabel: source.label, width: width)
+                        frozenSkillName(skill: skill, sourceLabel: source.label, width: width, level: 0, leafReserve: directSkillLeafReserve)
                     }
                 } else {
                     ForEach(groups, id: \.name) { group in
@@ -391,7 +484,8 @@ struct SkillMatrixView: View {
                     Text("(\(skills.count))").font(.system(size: 12)).foregroundStyle(.secondary)
                     Spacer(minLength: 0)
                 }
-                .padding(.horizontal, 12)
+                .padding(.leading, leadingPadding(forLevel: 1))
+                .padding(.trailing, skillColumnHorizontalPadding)
                 .frame(width: width, alignment: .leading)
                 .contentShape(Rectangle())
             }
@@ -405,19 +499,18 @@ struct SkillMatrixView: View {
 
             if isExpanded {
                 ForEach(skills) { skill in
-                    frozenSkillName(skill: skill, sourceLabel: source.label, width: width)
+                    frozenSkillName(skill: skill, sourceLabel: source.label, width: width, level: 1, leafReserve: groupedSkillLeafReserve)
                 }
             }
         }
     }
 
-    private func frozenSkillName(skill: Skill, sourceLabel: String, width: CGFloat) -> some View {
+    private func frozenSkillName(skill: Skill, sourceLabel: String, width: CGFloat, level: Int, leafReserve: CGFloat) -> some View {
         let hasDesc = skill.description != nil
         let isPopoverShown = popoverSkillId == skill.id
 
         return HStack(spacing: 4) {
-            Color.clear.frame(width: 31, height: 16)
-            Color.clear.frame(width: 13, height: 13)
+            Color.clear.frame(width: leafReserve, height: 16)
             Text(displayName(for: skill, sourceLabel: sourceLabel))
                 .font(.system(size: 13)).lineLimit(1).truncationMode(.tail)
             Spacer(minLength: 0)
@@ -438,7 +531,8 @@ struct SkillMatrixView: View {
                 }
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.leading, leadingPadding(forLevel: level))
+        .padding(.trailing, skillColumnHorizontalPadding)
         .frame(width: width, alignment: .leading)
         .contentShape(Rectangle())
         .onHover { hovering in
@@ -482,6 +576,10 @@ struct SkillMatrixView: View {
     private func displayNameNoSource(skill: Skill) -> String {
         skill.name.hasPrefix("skillhub-clone-") ? String(skill.name.dropFirst("skillhub-clone-".count)) : skill.name
     }
+
+    private func leadingPadding(forLevel level: Int) -> CGFloat {
+        skillColumnHorizontalPadding + CGFloat(level) * hierarchyIndent
+    }
 }
 
 private struct SkillCellToggle: View {
@@ -497,6 +595,8 @@ private struct ProgressPill: View {
     let enabled: Int
     let total: Int
     let onToggleAll: (Bool) -> Void
+
+    private let countTextWidth: CGFloat = 36
 
     private var isFull: Bool { enabled == total && total > 0 }
     private var isEmpty: Bool { enabled == 0 }
@@ -528,6 +628,8 @@ private struct ProgressPill: View {
                 Text("\(enabled)/\(total)")
                     .font(.system(size: 11, weight: .medium))
                     .monospacedDigit()
+                    .lineLimit(1)
+                    .frame(width: countTextWidth, alignment: .center)
                     .foregroundStyle(isFull ? Color.white : (isEmpty ? Color.secondary : Color.accentColor))
             }
             .padding(.horizontal, 7)
